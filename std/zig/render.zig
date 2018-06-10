@@ -465,11 +465,21 @@ fn renderExpression(
                 ast.Node.PrefixOp.Op.BoolNot,
                 ast.Node.PrefixOp.Op.Negation,
                 ast.Node.PrefixOp.Op.NegationWrap,
-                ast.Node.PrefixOp.Op.UnwrapMaybe,
                 ast.Node.PrefixOp.Op.MaybeType,
                 ast.Node.PrefixOp.Op.AddressOf,
                 => {
                     try renderToken(tree, stream, prefix_op_node.op_token, indent, start_col, Space.None);
+                },
+
+                ast.Node.PrefixOp.Op.UnwrapMaybe => {
+                    try renderExpression(allocator, stream, tree, indent, start_col, prefix_op_node.rhs, Space.None);
+                    try stream.write(".?");
+                    switch (space) {
+                        Space.Space => try stream.writeByte(' '),
+                        Space.Comma => try stream.write(",\n"),
+                        else => {},
+                    }
+                    return;
                 },
 
                 ast.Node.PrefixOp.Op.Try,
