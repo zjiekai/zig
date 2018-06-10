@@ -360,7 +360,17 @@ fn renderExpression(
                 break :blk if (loc.line == 0) op_space else Space.Newline;
             };
 
-            try renderToken(tree, stream, infix_op_node.op_token, indent, start_col, after_op_space);
+            if (tree.tokens.at(infix_op_node.op_token).id == Token.Id.QuestionMarkQuestionMark) {
+                try stream.write("orelse");
+                switch (after_op_space) {
+                    Space.Space => try stream.write(" "),
+                    Space.Newline => try stream.write("\n"),
+                    Space.Comma => try stream.write(",\n"),
+                    else => {},
+                }
+            } else {
+                try renderToken(tree, stream, infix_op_node.op_token, indent, start_col, after_op_space);
+            }
             if (after_op_space == Space.Newline) {
                 try stream.writeByteNTimes(' ', indent + indent_delta);
                 start_col.* = indent + indent_delta;
