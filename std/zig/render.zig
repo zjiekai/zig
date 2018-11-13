@@ -970,7 +970,6 @@ fn renderExpression(
 
             if (err_set_decl.decls.len == 0) {
                 try renderToken(tree, stream, err_set_decl.error_token, indent, start_col, Space.None);
-                try renderToken(tree, stream, period, indent, start_col, Space.None);
                 try renderToken(tree, stream, lbrace, indent, start_col, Space.None);
                 return renderToken(tree, stream, err_set_decl.rbrace_token, indent, start_col, space);
             }
@@ -987,14 +986,12 @@ fn renderExpression(
                 }
 
                 try renderToken(tree, stream, err_set_decl.error_token, indent, start_col, Space.None); // error
-                try renderToken(tree, stream, period, indent, start_col, Space.None);
                 try renderToken(tree, stream, lbrace, indent, start_col, Space.None); // {
                 try renderExpression(allocator, stream, tree, indent, start_col, node, Space.None);
                 return renderToken(tree, stream, err_set_decl.rbrace_token, indent, start_col, space); // }
             }
 
             try renderToken(tree, stream, err_set_decl.error_token, indent, start_col, Space.None); // error
-            try renderToken(tree, stream, period, indent, start_col, Space.None);
             try renderToken(tree, stream, lbrace, indent, start_col, Space.Newline); // {
             const new_indent = indent + indent_delta;
 
