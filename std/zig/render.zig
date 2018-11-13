@@ -345,7 +345,13 @@ fn renderExpression(
                 ast.Node.InfixOp.Op.Period, ast.Node.InfixOp.Op.ErrorUnion, ast.Node.InfixOp.Op.Range => Space.None,
                 else => Space.Space,
             };
-            try renderExpression(allocator, stream, tree, indent, start_col, infix_op_node.lhs, op_space);
+            if (infix_op_node.op == ast.Node.InfixOp.Op.Period and
+                infix_op_node.lhs.id == ast.Node.Id.ErrorType)
+            {
+                try stream.write("error");
+            } else {
+                try renderExpression(allocator, stream, tree, indent, start_col, infix_op_node.lhs, op_space);
+            }
 
             const after_op_space = blk: {
                 const loc = tree.tokenLocation(tree.tokens.at(infix_op_node.op_token).end, tree.nextToken(infix_op_node.op_token));
@@ -888,8 +894,8 @@ fn renderExpression(
             return renderToken(tree, stream, unreachable_node.token, indent, start_col, space);
         },
         ast.Node.Id.ErrorType => {
-            const error_type = @fieldParentPtr(ast.Node.ErrorType, "base", base);
-            return renderToken(tree, stream, error_type.token, indent, start_col, space);
+            try stream.write("anyerror");
+            return;
         },
         ast.Node.Id.VarType => {
             const var_type = @fieldParentPtr(ast.Node.VarType, "base", base);
