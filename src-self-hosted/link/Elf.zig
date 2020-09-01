@@ -1665,7 +1665,7 @@ pub fn updateDecl(self: *Elf, module: *Module, decl: *Module.Decl) !void {
                 const line_delta = std.zig.lineDelta(tree.source, 0, tree.token_locs[block.lbrace].start);
                 break :blk @intCast(u28, line_delta);
             } else if (decl.scope.cast(Module.Scope.ZIRModule)) |zir_module| {
-                const byte_off = zir_module.contents.module.decls[decl.src_index].inst.src;
+                const byte_off = zir_module.contents.module.decls[decl.src_index].src;
                 const line_delta = std.zig.lineDelta(zir_module.source.bytes, 0, byte_off);
                 break :blk @intCast(u28, line_delta);
             } else {

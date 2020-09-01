@@ -230,7 +230,7 @@ fn genCall(ctx: *Context, inst: *Inst.Call) !?[]u8 {
     return null;
 }
 
-fn genDbgStmt(ctx: *Context, inst: *Inst.NoOp) !?[]u8 {
+fn genDbgStmt(ctx: *Context, inst: *Inst.DbgStmt) !?[]u8 {
     // TODO emit #line directive here with line number and filename
     return null;
 }

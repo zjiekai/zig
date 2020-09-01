@@ -403,7 +403,7 @@ pub const TestContext = struct {
 
     fn run(self: *TestContext) !void {
         var progress = std.Progress{};
-        const root_node = try progress.start("tests", self.cases.items.len);
+        const root_node = try progress.start("", self.cases.items.len);
         defer root_node.end();
 
         for (self.cases.items) |case| {

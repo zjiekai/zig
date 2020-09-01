@@ -24,122 +24,129 @@ const Scope = Module.Scope;
 const InnerError = Module.InnerError;
 const Decl = Module.Decl;
 
-pub fn analyzeInst(mod: *Module, scope: *Scope, old_inst: *zir.Inst) InnerError!*Inst {
+/// Semantic Analysis.
+/// This struct must be accessed by only 1 thread at a time.
+const Sema = struct {
+    module: *Module,
+    src: usize,
+};
+
+pub fn analyzeInst(sema: *Sema, scope: *Scope, old_inst: *zir.Inst) InnerError!*Inst {
     switch (old_inst.tag) {
-        .alloc => return analyzeInstAlloc(mod, scope, old_inst.castTag(.alloc).?),
-        .alloc_inferred => return analyzeInstAllocInferred(mod, scope, old_inst.castTag(.alloc_inferred).?),
-        .arg => return analyzeInstArg(mod, scope, old_inst.castTag(.arg).?),
-        .bitcast_ref => return analyzeInstBitCastRef(mod, scope, old_inst.castTag(.bitcast_ref).?),
-        .bitcast_result_ptr => return analyzeInstBitCastResultPtr(mod, scope, old_inst.castTag(.bitcast_result_ptr).?),
-        .block => return analyzeInstBlock(mod, scope, old_inst.castTag(.block).?),
-        .@"break" => return analyzeInstBreak(mod, scope, old_inst.castTag(.@"break").?),
-        .breakpoint => return analyzeInstBreakpoint(mod, scope, old_inst.castTag(.breakpoint).?),
-        .breakvoid => return analyzeInstBreakVoid(mod, scope, old_inst.castTag(.breakvoid).?),
-        .call => return analyzeInstCall(mod, scope, old_inst.castTag(.call).?),
-        .coerce_result_block_ptr => return analyzeInstCoerceResultBlockPtr(mod, scope, old_inst.castTag(.coerce_result_block_ptr).?),
-        .coerce_result_ptr => return analyzeInstCoerceResultPtr(mod, scope, old_inst.castTag(.coerce_result_ptr).?),
-        .coerce_to_ptr_elem => return analyzeInstCoerceToPtrElem(mod, scope, old_inst.castTag(.coerce_to_ptr_elem).?),
-        .compileerror => return analyzeInstCompileError(mod, scope, old_inst.castTag(.compileerror).?),
-        .@"const" => return analyzeInstConst(mod, scope, old_inst.castTag(.@"const").?),
-        .dbg_stmt => return analyzeInstDbgStmt(mod, scope, old_inst.castTag(.dbg_stmt).?),
-        .declref => return analyzeInstDeclRef(mod, scope, old_inst.castTag(.declref).?),
-        .declref_str => return analyzeInstDeclRefStr(mod, scope, old_inst.castTag(.declref_str).?),
-        .declval => return analyzeInstDeclVal(mod, scope, old_inst.castTag(.declval).?),
-        .declval_in_module => return analyzeInstDeclValInModule(mod, scope, old_inst.castTag(.declval_in_module).?),
-        .ensure_result_used => return analyzeInstEnsureResultUsed(mod, scope, old_inst.castTag(.ensure_result_used).?),
-        .ensure_result_non_error => return analyzeInstEnsureResultNonError(mod, scope, old_inst.castTag(.ensure_result_non_error).?),
-        .ensure_indexable => return analyzeInstEnsureIndexable(mod, scope, old_inst.castTag(.ensure_indexable).?),
-        .ref => return analyzeInstRef(mod, scope, old_inst.castTag(.ref).?),
-        .ret_ptr => return analyzeInstRetPtr(mod, scope, old_inst.castTag(.ret_ptr).?),
-        .ret_type => return analyzeInstRetType(mod, scope, old_inst.castTag(.ret_type).?),
-        .single_const_ptr_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.single_const_ptr_type).?, false, .One),
-        .single_mut_ptr_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.single_mut_ptr_type).?, true, .One),
-        .many_const_ptr_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.many_const_ptr_type).?, false, .Many),
-        .many_mut_ptr_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.many_mut_ptr_type).?, true, .Many),
-        .c_const_ptr_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.c_const_ptr_type).?, false, .C),
-        .c_mut_ptr_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.c_mut_ptr_type).?, true, .C),
-        .const_slice_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.const_slice_type).?, false, .Slice),
-        .mut_slice_type => return analyzeInstSimplePtrType(mod, scope, old_inst.castTag(.mut_slice_type).?, true, .Slice),
-        .ptr_type => return analyzeInstPtrType(mod, scope, old_inst.castTag(.ptr_type).?),
-        .store => return analyzeInstStore(mod, scope, old_inst.castTag(.store).?),
-        .str => return analyzeInstStr(mod, scope, old_inst.castTag(.str).?),
+        .alloc => return sema.analyzeInstAlloc(scope, old_inst.castTag(.alloc).?),
+        .alloc_inferred => return sema.analyzeInstAllocInferred(scope, old_inst.castTag(.alloc_inferred).?),
+        .arg => return sema.analyzeInstArg(scope, old_inst.castTag(.arg).?),
+        .bitcast_ref => return sema.analyzeInstBitCastRef(scope, old_inst.castTag(.bitcast_ref).?),
+        .bitcast_result_ptr => return sema.analyzeInstBitCastResultPtr(scope, old_inst.castTag(.bitcast_result_ptr).?),
+        .block => return sema.analyzeInstBlock(scope, old_inst.castTag(.block).?),
+        .@"break" => return sema.analyzeInstBreak(scope, old_inst.castTag(.@"break").?),
+        .breakpoint => return sema.analyzeInstBreakpoint(scope, old_inst.castTag(.breakpoint).?),
+        .breakvoid => return sema.analyzeInstBreakVoid(scope, old_inst.castTag(.breakvoid).?),
+        .call => return sema.analyzeInstCall(scope, old_inst.castTag(.call).?),
+        .coerce_result_block_ptr => return sema.analyzeInstCoerceResultBlockPtr(scope, old_inst.castTag(.coerce_result_block_ptr).?),
+        .coerce_result_ptr => return sema.analyzeInstCoerceResultPtr(scope, old_inst.castTag(.coerce_result_ptr).?),
+        .coerce_to_ptr_elem => return sema.analyzeInstCoerceToPtrElem(scope, old_inst.castTag(.coerce_to_ptr_elem).?),
+        .compileerror => return sema.analyzeInstCompileError(scope, old_inst.castTag(.compileerror).?),
+        .@"const" => return sema.analyzeInstConst(scope, old_inst.castTag(.@"const").?),
+        .dbg_stmt => return sema.analyzeInstDbgStmt(scope, old_inst.castTag(.dbg_stmt).?),
+        .declref => return sema.analyzeInstDeclRef(scope, old_inst.castTag(.declref).?),
+        .declref_str => return sema.analyzeInstDeclRefStr(scope, old_inst.castTag(.declref_str).?),
+        .declval => return sema.analyzeInstDeclVal(scope, old_inst.castTag(.declval).?),
+        .declval_in_module => return sema.analyzeInstDeclValInModule(scope, old_inst.castTag(.declval_in_module).?),
+        .ensure_result_used => return sema.analyzeInstEnsureResultUsed(scope, old_inst.castTag(.ensure_result_used).?),
+        .ensure_result_non_error => return sema.analyzeInstEnsureResultNonError(scope, old_inst.castTag(.ensure_result_non_error).?),
+        .ensure_indexable => return sema.analyzeInstEnsureIndexable(scope, old_inst.castTag(.ensure_indexable).?),
+        .ref => return sema.analyzeInstRef(scope, old_inst.castTag(.ref).?),
+        .ret_ptr => return sema.analyzeInstRetPtr(scope, old_inst.castTag(.ret_ptr).?),
+        .ret_type => return sema.analyzeInstRetType(scope, old_inst.castTag(.ret_type).?),
+        .single_const_ptr_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.single_const_ptr_type).?, false, .One),
+        .single_mut_ptr_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.single_mut_ptr_type).?, true, .One),
+        .many_const_ptr_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.many_const_ptr_type).?, false, .Many),
+        .many_mut_ptr_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.many_mut_ptr_type).?, true, .Many),
+        .c_const_ptr_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.c_const_ptr_type).?, false, .C),
+        .c_mut_ptr_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.c_mut_ptr_type).?, true, .C),
+        .const_slice_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.const_slice_type).?, false, .Slice),
+        .mut_slice_type => return sema.analyzeInstSimplePtrType(scope, old_inst.castTag(.mut_slice_type).?, true, .Slice),
+        .ptr_type => return sema.analyzeInstPtrType(scope, old_inst.castTag(.ptr_type).?),
+        .store => return sema.analyzeInstStore(scope, old_inst.castTag(.store).?),
+        .str => return sema.analyzeInstStr(scope, old_inst.castTag(.str).?),
         .int => {
             const big_int = old_inst.castTag(.int).?.positionals.int;
-            return mod.constIntBig(scope, old_inst.src, Type.initTag(.comptime_int), big_int);
+            return sema.module.constIntBig(scope, old_inst.src, Type.initTag(.comptime_int), big_int);
         },
-        .inttype => return analyzeInstIntType(mod, scope, old_inst.castTag(.inttype).?),
-        .loop => return analyzeInstLoop(mod, scope, old_inst.castTag(.loop).?),
-        .param_type => return analyzeInstParamType(mod, scope, old_inst.castTag(.param_type).?),
-        .ptrtoint => return analyzeInstPtrToInt(mod, scope, old_inst.castTag(.ptrtoint).?),
-        .fieldptr => return analyzeInstFieldPtr(mod, scope, old_inst.castTag(.fieldptr).?),
-        .deref => return analyzeInstDeref(mod, scope, old_inst.castTag(.deref).?),
-        .as => return analyzeInstAs(mod, scope, old_inst.castTag(.as).?),
-        .@"asm" => return analyzeInstAsm(mod, scope, old_inst.castTag(.@"asm").?),
-        .@"unreachable" => return analyzeInstUnreachable(mod, scope, old_inst.castTag(.@"unreachable").?, true),
-        .unreach_nocheck => return analyzeInstUnreachable(mod, scope, old_inst.castTag(.unreach_nocheck).?, false),
-        .@"return" => return analyzeInstRet(mod, scope, old_inst.castTag(.@"return").?),
-        .returnvoid => return analyzeInstRetVoid(mod, scope, old_inst.castTag(.returnvoid).?),
-        .@"fn" => return analyzeInstFn(mod, scope, old_inst.castTag(.@"fn").?),
-        .@"export" => return analyzeInstExport(mod, scope, old_inst.castTag(.@"export").?),
-        .primitive => return analyzeInstPrimitive(mod, scope, old_inst.castTag(.primitive).?),
-        .fntype => return analyzeInstFnType(mod, scope, old_inst.castTag(.fntype).?),
-        .intcast => return analyzeInstIntCast(mod, scope, old_inst.castTag(.intcast).?),
-        .bitcast => return analyzeInstBitCast(mod, scope, old_inst.castTag(.bitcast).?),
-        .floatcast => return analyzeInstFloatCast(mod, scope, old_inst.castTag(.floatcast).?),
-        .elemptr => return analyzeInstElemPtr(mod, scope, old_inst.castTag(.elemptr).?),
-        .add => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.add).?),
-        .addwrap => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.addwrap).?),
-        .sub => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.sub).?),
-        .subwrap => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.subwrap).?),
-        .mul => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.mul).?),
-        .mulwrap => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.mulwrap).?),
-        .div => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.div).?),
-        .mod_rem => return analyzeInstArithmetic(mod, scope, old_inst.castTag(.mod_rem).?),
-        .array_cat => return analyzeInstArrayCat(mod, scope, old_inst.castTag(.array_cat).?),
-        .array_mul => return analyzeInstArrayMul(mod, scope, old_inst.castTag(.array_mul).?),
-        .bitand => return analyzeInstBitwise(mod, scope, old_inst.castTag(.bitand).?),
-        .bitnot => return analyzeInstBitNot(mod, scope, old_inst.castTag(.bitnot).?),
-        .bitor => return analyzeInstBitwise(mod, scope, old_inst.castTag(.bitor).?),
-        .xor => return analyzeInstBitwise(mod, scope, old_inst.castTag(.xor).?),
-        .shl => return analyzeInstShl(mod, scope, old_inst.castTag(.shl).?),
-        .shr => return analyzeInstShr(mod, scope, old_inst.castTag(.shr).?),
-        .cmp_lt => return analyzeInstCmp(mod, scope, old_inst.castTag(.cmp_lt).?, .lt),
-        .cmp_lte => return analyzeInstCmp(mod, scope, old_inst.castTag(.cmp_lte).?, .lte),
-        .cmp_eq => return analyzeInstCmp(mod, scope, old_inst.castTag(.cmp_eq).?, .eq),
-        .cmp_gte => return analyzeInstCmp(mod, scope, old_inst.castTag(.cmp_gte).?, .gte),
-        .cmp_gt => return analyzeInstCmp(mod, scope, old_inst.castTag(.cmp_gt).?, .gt),
-        .cmp_neq => return analyzeInstCmp(mod, scope, old_inst.castTag(.cmp_neq).?, .neq),
-        .condbr => return analyzeInstCondBr(mod, scope, old_inst.castTag(.condbr).?),
-        .isnull => return analyzeInstIsNonNull(mod, scope, old_inst.castTag(.isnull).?, true),
-        .isnonnull => return analyzeInstIsNonNull(mod, scope, old_inst.castTag(.isnonnull).?, false),
-        .iserr => return analyzeInstIsErr(mod, scope, old_inst.castTag(.iserr).?),
-        .boolnot => return analyzeInstBoolNot(mod, scope, old_inst.castTag(.boolnot).?),
-        .typeof => return analyzeInstTypeOf(mod, scope, old_inst.castTag(.typeof).?),
-        .optional_type => return analyzeInstOptionalType(mod, scope, old_inst.castTag(.optional_type).?),
-        .unwrap_optional_safe => return analyzeInstUnwrapOptional(mod, scope, old_inst.castTag(.unwrap_optional_safe).?, true),
-        .unwrap_optional_unsafe => return analyzeInstUnwrapOptional(mod, scope, old_inst.castTag(.unwrap_optional_unsafe).?, false),
-        .unwrap_err_safe => return analyzeInstUnwrapErr(mod, scope, old_inst.castTag(.unwrap_err_safe).?, true),
-        .unwrap_err_unsafe => return analyzeInstUnwrapErr(mod, scope, old_inst.castTag(.unwrap_err_unsafe).?, false),
-        .unwrap_err_code => return analyzeInstUnwrapErrCode(mod, scope, old_inst.castTag(.unwrap_err_code).?),
-        .ensure_err_payload_void => return analyzeInstEnsureErrPayloadVoid(mod, scope, old_inst.castTag(.ensure_err_payload_void).?),
-        .array_type => return analyzeInstArrayType(mod, scope, old_inst.castTag(.array_type).?),
-        .array_type_sentinel => return analyzeInstArrayTypeSentinel(mod, scope, old_inst.castTag(.array_type_sentinel).?),
-        .enum_literal => return analyzeInstEnumLiteral(mod, scope, old_inst.castTag(.enum_literal).?),
-        .merge_error_sets => return analyzeInstMergeErrorSets(mod, scope, old_inst.castTag(.merge_error_sets).?),
-        .error_union_type => return analyzeInstErrorUnionType(mod, scope, old_inst.castTag(.error_union_type).?),
-        .anyframe_type => return analyzeInstAnyframeType(mod, scope, old_inst.castTag(.anyframe_type).?),
-        .error_set => return analyzeInstErrorSet(mod, scope, old_inst.castTag(.error_set).?),
+        .inttype => return sema.analyzeInstIntType(scope, old_inst.castTag(.inttype).?),
+        .loop => return sema.analyzeInstLoop(scope, old_inst.castTag(.loop).?),
+        .param_type => return sema.analyzeInstParamType(scope, old_inst.castTag(.param_type).?),
+        .ptrtoint => return sema.analyzeInstPtrToInt(scope, old_inst.castTag(.ptrtoint).?),
+        .fieldptr => return sema.analyzeInstFieldPtr(scope, old_inst.castTag(.fieldptr).?),
+        .deref => return sema.analyzeInstDeref(scope, old_inst.castTag(.deref).?),
+        .as => return sema.analyzeInstAs(scope, old_inst.castTag(.as).?),
+        .@"asm" => return sema.analyzeInstAsm(scope, old_inst.castTag(.@"asm").?),
+        .@"unreachable" => return sema.analyzeInstUnreachable(scope, old_inst.castTag(.@"unreachable").?, true),
+        .unreach_nocheck => return sema.analyzeInstUnreachable(scope, old_inst.castTag(.unreach_nocheck).?, false),
+        .@"return" => return sema.analyzeInstRet(scope, old_inst.castTag(.@"return").?),
+        .returnvoid => return sema.analyzeInstRetVoid(scope, old_inst.castTag(.returnvoid).?),
+        .@"fn" => return sema.analyzeInstFn(scope, old_inst.castTag(.@"fn").?),
+        .@"export" => return sema.analyzeInstExport(scope, old_inst.castTag(.@"export").?),
+        .primitive => return sema.analyzeInstPrimitive(scope, old_inst.castTag(.primitive).?),
+        .fntype => return sema.analyzeInstFnType(scope, old_inst.castTag(.fntype).?),
+        .intcast => return sema.analyzeInstIntCast(scope, old_inst.castTag(.intcast).?),
+        .bitcast => return sema.analyzeInstBitCast(scope, old_inst.castTag(.bitcast).?),
+        .floatcast => return sema.analyzeInstFloatCast(scope, old_inst.castTag(.floatcast).?),
+        .elemptr => return sema.analyzeInstElemPtr(scope, old_inst.castTag(.elemptr).?),
+        .add => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.add).?),
+        .addwrap => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.addwrap).?),
+        .sub => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.sub).?),
+        .subwrap => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.subwrap).?),
+        .mul => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.mul).?),
+        .mulwrap => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.mulwrap).?),
+        .div => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.div).?),
+        .mod_rem => return sema.analyzeInstArithmetic(scope, old_inst.castTag(.mod_rem).?),
+        .array_cat => return sema.analyzeInstArrayCat(scope, old_inst.castTag(.array_cat).?),
+        .array_mul => return sema.analyzeInstArrayMul(scope, old_inst.castTag(.array_mul).?),
+        .bitand => return sema.analyzeInstBitwise(scope, old_inst.castTag(.bitand).?),
+        .bitnot => return sema.analyzeInstBitNot(scope, old_inst.castTag(.bitnot).?),
+        .bitor => return sema.analyzeInstBitwise(scope, old_inst.castTag(.bitor).?),
+        .xor => return sema.analyzeInstBitwise(scope, old_inst.castTag(.xor).?),
+        .shl => return sema.analyzeInstShl(scope, old_inst.castTag(.shl).?),
+        .shr => return sema.analyzeInstShr(scope, old_inst.castTag(.shr).?),
+        .cmp_lt => return sema.analyzeInstCmp(scope, old_inst.castTag(.cmp_lt).?, .lt),
+        .cmp_lte => return sema.analyzeInstCmp(scope, old_inst.castTag(.cmp_lte).?, .lte),
+        .cmp_eq => return sema.analyzeInstCmp(scope, old_inst.castTag(.cmp_eq).?, .eq),
+        .cmp_gte => return sema.analyzeInstCmp(scope, old_inst.castTag(.cmp_gte).?, .gte),
+        .cmp_gt => return sema.analyzeInstCmp(scope, old_inst.castTag(.cmp_gt).?, .gt),
+        .cmp_neq => return sema.analyzeInstCmp(scope, old_inst.castTag(.cmp_neq).?, .neq),
+        .condbr => return sema.analyzeInstCondBr(scope, old_inst.castTag(.condbr).?),
+        .isnull => return sema.analyzeInstIsNonNull(scope, old_inst.castTag(.isnull).?, true),
+        .isnonnull => return sema.analyzeInstIsNonNull(scope, old_inst.castTag(.isnonnull).?, false),
+        .iserr => return sema.analyzeInstIsErr(scope, old_inst.castTag(.iserr).?),
+        .boolnot => return sema.analyzeInstBoolNot(scope, old_inst.castTag(.boolnot).?),
+        .typeof => return sema.analyzeInstTypeOf(scope, old_inst.castTag(.typeof).?),
+        .optional_type => return sema.analyzeInstOptionalType(scope, old_inst.castTag(.optional_type).?),
+        .unwrap_optional_safe => return sema.analyzeInstUnwrapOptional(scope, old_inst.castTag(.unwrap_optional_safe).?, true),
+        .unwrap_optional_unsafe => return sema.analyzeInstUnwrapOptional(scope, old_inst.castTag(.unwrap_optional_unsafe).?, false),
+        .unwrap_err_safe => return sema.analyzeInstUnwrapErr(scope, old_inst.castTag(.unwrap_err_safe).?, true),
+        .unwrap_err_unsafe => return sema.analyzeInstUnwrapErr(scope, old_inst.castTag(.unwrap_err_unsafe).?, false),
+        .unwrap_err_code => return sema.analyzeInstUnwrapErrCode(scope, old_inst.castTag(.unwrap_err_code).?),
+        .ensure_err_payload_void => return sema.analyzeInstEnsureErrPayloadVoid(scope, old_inst.castTag(.ensure_err_payload_void).?),
+        .array_type => return sema.analyzeInstArrayType(scope, old_inst.castTag(.array_type).?),
+        .array_type_sentinel => return sema.analyzeInstArrayTypeSentinel(scope, old_inst.castTag(.array_type_sentinel).?),
+        .enum_literal => return sema.analyzeInstEnumLiteral(scope, old_inst.castTag(.enum_literal).?),
+        .merge_error_sets => return sema.analyzeInstMergeErrorSets(scope, old_inst.castTag(.merge_error_sets).?),
+        .error_union_type => return sema.analyzeInstErrorUnionType(scope, old_inst.castTag(.error_union_type).?),
+        .anyframe_type => return sema.analyzeInstAnyframeType(scope, old_inst.castTag(.anyframe_type).?),
+        .error_set => return sema.analyzeInstErrorSet(scope, old_inst.castTag(.error_set).?),
     }
 }
 
-pub fn analyzeBody(mod: *Module, scope: *Scope, body: zir.Module.Body) !void {
+pub fn analyzeBody(sema: *Sema, scope: *Scope, body: zir.Module.Body) !void {
     for (body.instructions) |src_inst, i| {
-        const analyzed_inst = try analyzeInst(mod, scope, src_inst);
+        const analyzed_inst = try sema.analyzeInst(scope, src_inst);
         src_inst.analyzed_inst = analyzed_inst;
         if (analyzed_inst.ty.zigTypeTag() == .NoReturn) {
             for (body.instructions[i..]) |unreachable_inst| {
                 if (unreachable_inst.castTag(.dbg_stmt)) |dbg_stmt| {
-                    return mod.fail(scope, dbg_stmt.base.src, "unreachable code", .{});
+                    return sema.module.failSrc(scope, dbg_stmt.positionals.src, "unreachable code", .{});
                 }
             }
             break;
@@ -147,29 +154,29 @@ pub fn analyzeBody(mod: *Module, scope: *Scope, body: zir.Module.Body) !void {
     }
 }
 
-pub fn analyzeBodyValueAsType(mod: *Module, block_scope: *Scope.Block, body: zir.Module.Body) !Type {
-    try analyzeBody(mod, &block_scope.base, body);
+pub fn analyzeBodyValueAsType(sema: *Sema, block_scope: *Scope.Block, body: zir.Module.Body) !Type {
+    try sema.analyzeBody(&block_scope.base, body);
     for (block_scope.instructions.items) |inst| {
         if (inst.castTag(.ret)) |ret| {
-            const val = try mod.resolveConstValue(&block_scope.base, ret.operand);
+            const val = try sema.module.resolveConstValue(&block_scope.base, ret.operand);
             return val.toType(block_scope.base.arena());
         } else {
-            return mod.fail(&block_scope.base, inst.src, "unable to resolve comptime value", .{});
+            return sema.fail(&block_scope.base, "unable to resolve comptime value", .{});
         }
     }
     unreachable;
 }
 
-pub fn analyzeZirDecl(mod: *Module, decl: *Decl, src_decl: *zir.Decl) InnerError!bool {
+pub fn analyzeZirDecl(sema: *Sema, decl: *Decl, src_decl: *zir.Decl) InnerError!bool {
     var decl_scope: Scope.DeclAnalysis = .{
         .decl = decl,
-        .arena = std.heap.ArenaAllocator.init(mod.gpa),
+        .arena = std.heap.ArenaAllocator.init(sema.module.gpa),
     };
     errdefer decl_scope.arena.deinit();
 
     decl.analysis = .in_progress;
 
-    const typed_value = try analyzeConstInst(mod, &decl_scope.base, src_decl.inst);
+    const typed_value = try sema.analyzeConstInst(&decl_scope.base, src_decl.inst);
     const arena_state = try decl_scope.arena.allocator.create(std.heap.ArenaAllocator.State);
 
     var prev_type_has_bits = false;
@@ -179,7 +186,7 @@ pub fn analyzeZirDecl(mod: *Module, decl: *Decl, src_decl: *zir.Decl) InnerError
         prev_type_has_bits = tvm.typed_value.ty.hasCodeGenBits();
         type_changed = !tvm.typed_value.ty.eql(typed_value.ty);
 
-        tvm.deinit(mod.gpa);
+        tvm.deinit(sema.module.gpa);
     }
 
     arena_state.* = decl_scope.arena.state;
@@ -190,37 +197,37 @@ pub fn analyzeZirDecl(mod: *Module, decl: *Decl, src_decl: *zir.Decl) InnerError
         },
     };
     decl.analysis = .complete;
-    decl.generation = mod.generation;
+    decl.generation = sema.module.generation;
     if (typed_value.ty.hasCodeGenBits()) {
         // We don't fully codegen the decl until later, but we do need to reserve a global
         // offset table index for it. This allows us to codegen decls out of dependency order,
         // increasing how many computations can be done in parallel.
-        try mod.bin_file.allocateDeclIndexes(decl);
-        try mod.work_queue.writeItem(.{ .codegen_decl = decl });
+        try sema.module.bin_file.allocateDeclIndexes(decl);
+        try sema.module.work_queue.writeItem(.{ .codegen_decl = decl });
     } else if (prev_type_has_bits) {
-        mod.bin_file.freeDecl(decl);
+        sema.module.bin_file.freeDecl(decl);
     }
 
     return type_changed;
 }
 
-pub fn resolveZirDecl(mod: *Module, scope: *Scope, src_decl: *zir.Decl) InnerError!*Decl {
-    const zir_module = mod.root_scope.cast(Scope.ZIRModule).?;
+pub fn resolveZirDecl(sema: *Sema, scope: *Scope, src_decl: *zir.Decl) InnerError!*Decl {
+    const zir_module = sema.module.root_scope.cast(Scope.ZIRModule).?;
     const entry = zir_module.contents.module.findDecl(src_decl.name).?;
-    return resolveZirDeclHavingIndex(mod, scope, src_decl, entry.index);
+    return sema.resolveZirDeclHavingIndex(scope, src_decl, entry.index);
 }
 
-fn resolveZirDeclHavingIndex(mod: *Module, scope: *Scope, src_decl: *zir.Decl, src_index: usize) InnerError!*Decl {
+fn resolveZirDeclHavingIndex(sema: *Sema, scope: *Scope, src_decl: *zir.Decl, src_index: usize) InnerError!*Decl {
     const name_hash = scope.namespace().fullyQualifiedNameHash(src_decl.name);
-    const decl = mod.decl_table.get(name_hash).?;
+    const decl = sema.module.decl_table.get(name_hash).?;
     decl.src_index = src_index;
-    try mod.ensureDeclAnalyzed(decl);
+    try sema.module.ensureDeclAnalyzed(decl);
     return decl;
 }
 
 /// Declares a dependency on the decl.
-fn resolveCompleteZirDecl(mod: *Module, scope: *Scope, src_decl: *zir.Decl) InnerError!*Decl {
-    const decl = try resolveZirDecl(mod, scope, src_decl);
+fn resolveCompleteZirDecl(sema: *Sema, scope: *Scope, src_decl: *zir.Decl) InnerError!*Decl {
+    const decl = try sema.resolveZirDecl(scope, src_decl);
     switch (decl.analysis) {
         .unreferenced => unreachable,
         .in_progress => unreachable,
@@ -239,7 +246,7 @@ fn resolveCompleteZirDecl(mod: *Module, scope: *Scope, src_decl: *zir.Decl) Inne
 }
 
 /// TODO Look into removing this function. The body is only needed for .zir files, not .zig files.
-pub fn resolveInst(mod: *Module, scope: *Scope, old_inst: *zir.Inst) InnerError!*Inst {
+pub fn resolveInst(sema: *Sema, scope: *Scope, old_inst: *zir.Inst) InnerError!*Inst {
     if (old_inst.analyzed_inst) |inst| return inst;
 
     // If this assert trips, the instruction that was referenced did not get properly
@@ -248,7 +255,7 @@ pub fn resolveInst(mod: *Module, scope: *Scope, old_inst: *zir.Inst) InnerError!
     const entry = if (old_inst.cast(zir.Inst.DeclVal)) |declval| blk: {
         const decl_name = declval.positionals.name;
         const entry = zir_module.contents.module.findDecl(decl_name) orelse
-            return mod.fail(scope, old_inst.src, "decl '{}' not found", .{decl_name});
+            return sema.fail(scope, "decl '{}' not found", .{decl_name});
         break :blk entry;
     } else blk: {
         // If this assert trips, the instruction that was referenced did not get
@@ -256,136 +263,136 @@ pub fn resolveInst(mod: *Module, scope: *Scope, old_inst: *zir.Inst) InnerError!
         // referenced by the current one.
         break :blk zir_module.contents.module.findInstDecl(old_inst).?;
     };
-    const decl = try resolveCompleteZirDecl(mod, scope, entry.decl);
-    const decl_ref = try mod.analyzeDeclRef(scope, old_inst.src, decl);
+    const decl = try sema.resolveCompleteZirDecl(scope, entry.decl);
+    const decl_ref = try sema.module.analyzeDeclRef(scope, old_inst.src, decl);
     // Note: it would be tempting here to store the result into old_inst.analyzed_inst field,
     // but this would prevent the analyzeDeclRef from happening, which is needed to properly
     // detect Decl dependencies and dependency failures on updates.
-    return mod.analyzeDeref(scope, old_inst.src, decl_ref, old_inst.src);
+    return sema.module.analyzeDeref(scope, old_inst.src, decl_ref, old_inst.src);
 }
 
-fn resolveConstString(mod: *Module, scope: *Scope, old_inst: *zir.Inst) ![]u8 {
-    const new_inst = try resolveInst(mod, scope, old_inst);
+fn resolveConstString(sema: *Sema, scope: *Scope, old_inst: *zir.Inst) ![]u8 {
+    const new_inst = try sema.resolveInst(scope, old_inst);
     const wanted_type = Type.initTag(.const_slice_u8);
-    const coerced_inst = try mod.coerce(scope, wanted_type, new_inst);
-    const val = try mod.resolveConstValue(scope, coerced_inst);
+    const coerced_inst = try sema.module.coerce(scope, wanted_type, new_inst);
+    const val = try sema.module.resolveConstValue(scope, coerced_inst);
     return val.toAllocatedBytes(scope.arena());
 }
 
-fn resolveType(mod: *Module, scope: *Scope, old_inst: *zir.Inst) !Type {
-    const new_inst = try resolveInst(mod, scope, old_inst);
+fn resolveType(sema: *Sema, scope: *Scope, old_inst: *zir.Inst) !Type {
+    const new_inst = try sema.resolveInst(scope, old_inst);
     const wanted_type = Type.initTag(.@"type");
-    const coerced_inst = try mod.coerce(scope, wanted_type, new_inst);
-    const val = try mod.resolveConstValue(scope, coerced_inst);
+    const coerced_inst = try sema.module.coerce(scope, wanted_type, new_inst);
+    const val = try sema.module.resolveConstValue(scope, coerced_inst);
     return val.toType(scope.arena());
 }
 
-fn resolveInt(mod: *Module, scope: *Scope, old_inst: *zir.Inst, dest_type: Type) !u64 {
-    const new_inst = try resolveInst(mod, scope, old_inst);
-    const coerced = try mod.coerce(scope, dest_type, new_inst);
-    const val = try mod.resolveConstValue(scope, coerced);
+fn resolveInt(sema: *Sema, scope: *Scope, old_inst: *zir.Inst, dest_type: Type) !u64 {
+    const new_inst = try sema.resolveInst(scope, old_inst);
+    const coerced = try sema.module.coerce(scope, dest_type, new_inst);
+    const val = try sema.module.resolveConstValue(scope, coerced);
 
     return val.toUnsignedInt();
 }
 
-pub fn resolveInstConst(mod: *Module, scope: *Scope, old_inst: *zir.Inst) InnerError!TypedValue {
-    const new_inst = try resolveInst(mod, scope, old_inst);
-    const val = try mod.resolveConstValue(scope, new_inst);
+pub fn resolveInstConst(sema: *Sema, scope: *Scope, old_inst: *zir.Inst) InnerError!TypedValue {
+    const new_inst = try sema.resolveInst(scope, old_inst);
+    const val = try sema.module.resolveConstValue(scope, new_inst);
     return TypedValue{
         .ty = new_inst.ty,
         .val = val,
     };
 }
 
-fn analyzeInstConst(mod: *Module, scope: *Scope, const_inst: *zir.Inst.Const) InnerError!*Inst {
+fn analyzeInstConst(sema: *Sema, scope: *Scope, const_inst: *zir.Inst.Const) InnerError!*Inst {
     // Move the TypedValue from old memory to new memory. This allows freeing the ZIR instructions
     // after analysis.
     const typed_value_copy = try const_inst.positionals.typed_value.copy(scope.arena());
-    return mod.constInst(scope, const_inst.base.src, typed_value_copy);
+    return sema.module.constInst(scope, const_inst.base.src, typed_value_copy);
 }
 
-fn analyzeConstInst(mod: *Module, scope: *Scope, old_inst: *zir.Inst) InnerError!TypedValue {
-    const new_inst = try analyzeInst(mod, scope, old_inst);
+fn analyzeConstInst(sema: *Sema, scope: *Scope, old_inst: *zir.Inst) InnerError!TypedValue {
+    const new_inst = try sema.analyzeInst(scope, old_inst);
     return TypedValue{
         .ty = new_inst.ty,
-        .val = try mod.resolveConstValue(scope, new_inst),
+        .val = try sema.module.resolveConstValue(scope, new_inst),
     };
 }
 
 fn analyzeInstCoerceResultBlockPtr(
-    mod: *Module,
+    sema: *Sema,
     scope: *Scope,
     inst: *zir.Inst.CoerceResultBlockPtr,
 ) InnerError!*Inst {
-    return mod.fail(scope, inst.base.src, "TODO implement analyzeInstCoerceResultBlockPtr", .{});
+    return sema.fail(scope, "TODO implement analyzeInstCoerceResultBlockPtr", .{});
 }
 
-fn analyzeInstBitCastRef(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    return mod.fail(scope, inst.base.src, "TODO implement analyzeInstBitCastRef", .{});
+fn analyzeInstBitCastRef(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    return sema.fail(scope, "TODO implement analyzeInstBitCastRef", .{});
 }
 
-fn analyzeInstBitCastResultPtr(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    return mod.fail(scope, inst.base.src, "TODO implement analyzeInstBitCastResultPtr", .{});
+fn analyzeInstBitCastResultPtr(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    return sema.fail(scope, "TODO implement analyzeInstBitCastResultPtr", .{});
 }
 
-fn analyzeInstCoerceResultPtr(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
-    return mod.fail(scope, inst.base.src, "TODO implement analyzeInstCoerceResultPtr", .{});
+fn analyzeInstCoerceResultPtr(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+    return sema.fail(scope, "TODO implement analyzeInstCoerceResultPtr", .{});
 }
 
 /// Equivalent to `as(ptr_child_type(typeof(ptr)), value)`.
-fn analyzeInstCoerceToPtrElem(mod: *Module, scope: *Scope, inst: *zir.Inst.CoerceToPtrElem) InnerError!*Inst {
-    const ptr = try resolveInst(mod, scope, inst.positionals.ptr);
-    const operand = try resolveInst(mod, scope, inst.positionals.value);
-    return mod.coerce(scope, ptr.ty.elemType(), operand);
+fn analyzeInstCoerceToPtrElem(sema: *Sema, scope: *Scope, inst: *zir.Inst.CoerceToPtrElem) InnerError!*Inst {
+    const ptr = try sema.resolveInst(scope, inst.positionals.ptr);
+    const operand = try sema.resolveInst(scope, inst.positionals.value);
+    return sema.module.coerce(scope, ptr.ty.elemType(), operand);
 }
 
-fn analyzeInstRetPtr(mod: *Module, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
-    return mod.fail(scope, inst.base.src, "TODO implement analyzeInstRetPtr", .{});
+fn analyzeInstRetPtr(sema: *Sema, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
+    return sema.module.fail(scope, inst.base.src, "TODO implement analyzeInstRetPtr", .{});
 }
 
-fn analyzeInstRef(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
-    const ptr_type = try mod.simplePtrType(scope, inst.base.src, operand.ty, false, .One);
+fn analyzeInstRef(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
+    const ptr_type = try sema.module.simplePtrType(scope, inst.base.src, operand.ty, false, .One);
 
     if (operand.value()) |val| {
         const ref_payload = try scope.arena().create(Value.Payload.RefVal);
         ref_payload.* = .{ .val = val };
 
-        return mod.constInst(scope, inst.base.src, .{
+        return sema.module.constInst(scope, inst.base.src, .{
             .ty = ptr_type,
             .val = Value.initPayload(&ref_payload.base),
         });
     }
 
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
-    return mod.addUnOp(b, inst.base.src, ptr_type, .ref, operand);
+    const b = try sema.module.requireRuntimeBlock(scope);
+    return sema.module.addUnOp(b, inst.base.src, ptr_type, .ref, operand);
 }
 
-fn analyzeInstRetType(mod: *Module, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+fn analyzeInstRetType(sema: *Sema, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
+    const b = try sema.module.requireRuntimeBlock(scope);
     const fn_ty = b.func.?.owner_decl.typed_value.most_recent.typed_value.ty;
     const ret_type = fn_ty.fnReturnType();
-    return mod.constType(scope, inst.base.src, ret_type);
+    return sema.module.constType(scope, inst.base.src, ret_type);
 }
 
-fn analyzeInstEnsureResultUsed(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstEnsureResultUsed(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOpWithSrcNode) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     switch (operand.ty.zigTypeTag()) {
-        .Void, .NoReturn => return mod.constVoid(scope, operand.src),
-        else => return mod.fail(scope, operand.src, "expression value is ignored", .{}),
+        .Void, .NoReturn => return sema.module.constVoid(scope, operand.src),
+        else => return sema.module.failNode(scope, inst.positionals.src, "expression value is ignored", .{}),
     }
 }
 
-fn analyzeInstEnsureResultNonError(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstEnsureResultNonError(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOpWithSrcNode) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     switch (operand.ty.zigTypeTag()) {
-        .ErrorSet, .ErrorUnion => return mod.fail(scope, operand.src, "error is discarded", .{}),
-        else => return mod.constVoid(scope, operand.src),
+        .ErrorSet, .ErrorUnion => return sema.module.failNode(scope, inst.positionals.src, "error is discarded", .{}),
+        else => return sema.module.constVoid(scope, operand.src),
     }
 }
 
-fn analyzeInstEnsureIndexable(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstEnsureIndexable(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     const elem_ty = operand.ty.elemType();
     if (elem_ty.isIndexable()) {
         return mod.constVoid(scope, operand.src);
@@ -397,29 +404,29 @@ fn analyzeInstEnsureIndexable(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp)
     }
 }
 
-fn analyzeInstAlloc(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const var_type = try resolveType(mod, scope, inst.positionals.operand);
+fn analyzeInstAlloc(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const var_type = try sema.resolveType(scope, inst.positionals.operand);
     // TODO this should happen only for var allocs
     if (!var_type.isValidVarType(false)) {
         return mod.fail(scope, inst.base.src, "variable of type '{}' must be const or comptime", .{var_type});
     }
     const ptr_type = try mod.simplePtrType(scope, inst.base.src, var_type, true, .One);
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     return mod.addNoOp(b, inst.base.src, ptr_type, .alloc);
 }
 
-fn analyzeInstAllocInferred(mod: *Module, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
+fn analyzeInstAllocInferred(sema: *Sema, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstAllocInferred", .{});
 }
 
-fn analyzeInstStore(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
-    const ptr = try resolveInst(mod, scope, inst.positionals.lhs);
-    const value = try resolveInst(mod, scope, inst.positionals.rhs);
+fn analyzeInstStore(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+    const ptr = try sema.resolveInst(scope, inst.positionals.lhs);
+    const value = try sema.resolveInst(scope, inst.positionals.rhs);
     return mod.storePtr(scope, inst.base.src, ptr, value);
 }
 
-fn analyzeInstParamType(mod: *Module, scope: *Scope, inst: *zir.Inst.ParamType) InnerError!*Inst {
-    const fn_inst = try resolveInst(mod, scope, inst.positionals.func);
+fn analyzeInstParamType(sema: *Sema, scope: *Scope, inst: *zir.Inst.ParamType) InnerError!*Inst {
+    const fn_inst = try sema.resolveInst(scope, inst.positionals.func);
     const arg_index = inst.positionals.arg_index;
 
     const fn_ty: Type = switch (fn_inst.ty.zigTypeTag()) {
@@ -447,7 +454,7 @@ fn analyzeInstParamType(mod: *Module, scope: *Scope, inst: *zir.Inst.ParamType) 
     return mod.constType(scope, inst.base.src, param_type);
 }
 
-fn analyzeInstStr(mod: *Module, scope: *Scope, str_inst: *zir.Inst.Str) InnerError!*Inst {
+fn analyzeInstStr(sema: *Sema, scope: *Scope, str_inst: *zir.Inst.Str) InnerError!*Inst {
     // The bytes references memory inside the ZIR module, which can get deallocated
     // after semantic analysis is complete. We need the memory to be in the new anonymous Decl's arena.
     var new_decl_arena = std.heap.ArenaAllocator.init(mod.gpa);
@@ -467,20 +474,20 @@ fn analyzeInstStr(mod: *Module, scope: *Scope, str_inst: *zir.Inst.Str) InnerErr
     return mod.analyzeDeclRef(scope, str_inst.base.src, new_decl);
 }
 
-fn analyzeInstExport(mod: *Module, scope: *Scope, export_inst: *zir.Inst.Export) InnerError!*Inst {
-    const symbol_name = try resolveConstString(mod, scope, export_inst.positionals.symbol_name);
+fn analyzeInstExport(sema: *Sema, scope: *Scope, export_inst: *zir.Inst.Export) InnerError!*Inst {
+    const symbol_name = try sema.resolveConstString(scope, export_inst.positionals.symbol_name);
     const exported_decl = mod.lookupDeclName(scope, export_inst.positionals.decl_name) orelse
         return mod.fail(scope, export_inst.base.src, "decl '{}' not found", .{export_inst.positionals.decl_name});
     try mod.analyzeExport(scope, export_inst.base.src, symbol_name, exported_decl);
     return mod.constVoid(scope, export_inst.base.src);
 }
 
-fn analyzeInstCompileError(mod: *Module, scope: *Scope, inst: *zir.Inst.CompileError) InnerError!*Inst {
+fn analyzeInstCompileError(sema: *Sema, scope: *Scope, inst: *zir.Inst.CompileError) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "{}", .{inst.positionals.msg});
 }
 
-fn analyzeInstArg(mod: *Module, scope: *Scope, inst: *zir.Inst.Arg) InnerError!*Inst {
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+fn analyzeInstArg(sema: *Sema, scope: *Scope, inst: *zir.Inst.Arg) InnerError!*Inst {
+    const b = try mod.requireRuntimeBlock(scope);
     const fn_ty = b.func.?.owner_decl.typed_value.most_recent.typed_value.ty;
     const param_index = b.instructions.items.len;
     const param_count = fn_ty.fnParamLen();
@@ -495,7 +502,7 @@ fn analyzeInstArg(mod: *Module, scope: *Scope, inst: *zir.Inst.Arg) InnerError!*
     return mod.addArg(b, inst.base.src, param_type, name);
 }
 
-fn analyzeInstLoop(mod: *Module, scope: *Scope, inst: *zir.Inst.Loop) InnerError!*Inst {
+fn analyzeInstLoop(sema: *Sema, scope: *Scope, inst: *zir.Inst.Loop) InnerError!*Inst {
     const parent_block = scope.cast(Scope.Block).?;
 
     // Reserve space for a Loop instruction so that generated Break instructions can
@@ -520,7 +527,7 @@ fn analyzeInstLoop(mod: *Module, scope: *Scope, inst: *zir.Inst.Loop) InnerError
     };
     defer child_block.instructions.deinit(mod.gpa);
 
-    try analyzeBody(mod, &child_block.base, inst.positionals.body);
+    try sema.analyzeBody(&child_block.base, inst.positionals.body);
 
     // Loop repetition is implied so the last instruction may or may not be a noreturn instruction.
 
@@ -529,7 +536,7 @@ fn analyzeInstLoop(mod: *Module, scope: *Scope, inst: *zir.Inst.Loop) InnerError
     return &loop_inst.base;
 }
 
-fn analyzeInstBlock(mod: *Module, scope: *Scope, inst: *zir.Inst.Block) InnerError!*Inst {
+fn analyzeInstBlock(sema: *Sema, scope: *Scope, inst: *zir.Inst.Block) InnerError!*Inst {
     const parent_block = scope.cast(Scope.Block).?;
 
     // Reserve space for a Block instruction so that generated Break instructions can
@@ -563,7 +570,7 @@ fn analyzeInstBlock(mod: *Module, scope: *Scope, inst: *zir.Inst.Block) InnerErr
     defer child_block.instructions.deinit(mod.gpa);
     defer label.results.deinit(mod.gpa);
 
-    try analyzeBody(mod, &child_block.base, inst.positionals.body);
+    try sema.analyzeBody(&child_block.base, inst.positionals.body);
 
     // Blocks must terminate with noreturn instruction.
     assert(child_block.instructions.items.len != 0);
@@ -577,50 +584,51 @@ fn analyzeInstBlock(mod: *Module, scope: *Scope, inst: *zir.Inst.Block) InnerErr
     return &block_inst.base;
 }
 
-fn analyzeInstBreakpoint(mod: *Module, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+fn analyzeInstBreakpoint(sema: *Sema, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
+    const b = try mod.requireRuntimeBlock(scope);
     return mod.addNoOp(b, inst.base.src, Type.initTag(.void), .breakpoint);
 }
 
-fn analyzeInstBreak(mod: *Module, scope: *Scope, inst: *zir.Inst.Break) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstBreak(sema: *Sema, scope: *Scope, inst: *zir.Inst.Break) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     const block = inst.positionals.block;
-    return analyzeBreak(mod, scope, inst.base.src, block, operand);
+    return sema.analyzeBreak(scope, inst.base.src, block, operand);
 }
 
-fn analyzeInstBreakVoid(mod: *Module, scope: *Scope, inst: *zir.Inst.BreakVoid) InnerError!*Inst {
+fn analyzeInstBreakVoid(sema: *Sema, scope: *Scope, inst: *zir.Inst.BreakVoid) InnerError!*Inst {
     const block = inst.positionals.block;
     const void_inst = try mod.constVoid(scope, inst.base.src);
-    return analyzeBreak(mod, scope, inst.base.src, block, void_inst);
+    return sema.analyzeBreak(scope, inst.base.src, block, void_inst);
 }
 
-fn analyzeInstDbgStmt(mod: *Module, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
-    return mod.addNoOp(b, inst.base.src, Type.initTag(.void), .dbg_stmt);
+fn analyzeInstDbgStmt(sema: *Sema, scope: *Scope, inst: *zir.Inst.DbgStmt) InnerError!*Inst {
+    mod.src = inst.positionals.src;
+    const b = try mod.requireRuntimeBlock(scope);
+    return mod.addDbgStmt(b, inst.positionals.src);
 }
 
-fn analyzeInstDeclRefStr(mod: *Module, scope: *Scope, inst: *zir.Inst.DeclRefStr) InnerError!*Inst {
-    const decl_name = try resolveConstString(mod, scope, inst.positionals.name);
+fn analyzeInstDeclRefStr(sema: *Sema, scope: *Scope, inst: *zir.Inst.DeclRefStr) InnerError!*Inst {
+    const decl_name = try sema.resolveConstString(scope, inst.positionals.name);
     return mod.analyzeDeclRefByName(scope, inst.base.src, decl_name);
 }
 
-fn analyzeInstDeclRef(mod: *Module, scope: *Scope, inst: *zir.Inst.DeclRef) InnerError!*Inst {
+fn analyzeInstDeclRef(sema: *Sema, scope: *Scope, inst: *zir.Inst.DeclRef) InnerError!*Inst {
     return mod.analyzeDeclRefByName(scope, inst.base.src, inst.positionals.name);
 }
 
-fn analyzeInstDeclVal(mod: *Module, scope: *Scope, inst: *zir.Inst.DeclVal) InnerError!*Inst {
-    const decl = try analyzeDeclVal(mod, scope, inst);
+fn analyzeInstDeclVal(sema: *Sema, scope: *Scope, inst: *zir.Inst.DeclVal) InnerError!*Inst {
+    const decl = try sema.analyzeDeclVal(scope, inst);
     const ptr = try mod.analyzeDeclRef(scope, inst.base.src, decl);
     return mod.analyzeDeref(scope, inst.base.src, ptr, inst.base.src);
 }
 
-fn analyzeInstDeclValInModule(mod: *Module, scope: *Scope, inst: *zir.Inst.DeclValInModule) InnerError!*Inst {
+fn analyzeInstDeclValInModule(sema: *Sema, scope: *Scope, inst: *zir.Inst.DeclValInModule) InnerError!*Inst {
     const decl = inst.positionals.decl;
     return mod.analyzeDeclRef(scope, inst.base.src, decl);
 }
 
-fn analyzeInstCall(mod: *Module, scope: *Scope, inst: *zir.Inst.Call) InnerError!*Inst {
-    const func = try resolveInst(mod, scope, inst.positionals.func);
+fn analyzeInstCall(sema: *Sema, scope: *Scope, inst: *zir.Inst.Call) InnerError!*Inst {
+    const func = try sema.resolveInst(scope, inst.positionals.func);
     if (func.ty.zigTypeTag() != .Fn)
         return mod.fail(scope, inst.positionals.func.src, "type '{}' not a function", .{func.ty});
 
@@ -672,18 +680,18 @@ fn analyzeInstCall(mod: *Module, scope: *Scope, inst: *zir.Inst.Call) InnerError
 
     const casted_args = try scope.arena().alloc(*Inst, fn_params_len);
     for (inst.positionals.args) |src_arg, i| {
-        const uncasted_arg = try resolveInst(mod, scope, src_arg);
+        const uncasted_arg = try sema.resolveInst(scope, src_arg);
         casted_args[i] = try mod.coerce(scope, fn_param_types[i], uncasted_arg);
     }
 
     const ret_type = func.ty.fnReturnType();
 
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     return mod.addCall(b, inst.base.src, ret_type, func, casted_args);
 }
 
-fn analyzeInstFn(mod: *Module, scope: *Scope, fn_inst: *zir.Inst.Fn) InnerError!*Inst {
-    const fn_type = try resolveType(mod, scope, fn_inst.positionals.fn_type);
+fn analyzeInstFn(sema: *Sema, scope: *Scope, fn_inst: *zir.Inst.Fn) InnerError!*Inst {
+    const fn_type = try sema.resolveType(scope, fn_inst.positionals.fn_type);
     const fn_zir = blk: {
         var fn_arena = std.heap.ArenaAllocator.init(mod.gpa);
         errdefer fn_arena.deinit();
@@ -710,36 +718,36 @@ fn analyzeInstFn(mod: *Module, scope: *Scope, fn_inst: *zir.Inst.Fn) InnerError!
     });
 }
 
-fn analyzeInstIntType(mod: *Module, scope: *Scope, inttype: *zir.Inst.IntType) InnerError!*Inst {
+fn analyzeInstIntType(sema: *Sema, scope: *Scope, inttype: *zir.Inst.IntType) InnerError!*Inst {
     return mod.fail(scope, inttype.base.src, "TODO implement inttype", .{});
 }
 
-fn analyzeInstOptionalType(mod: *Module, scope: *Scope, optional: *zir.Inst.UnOp) InnerError!*Inst {
-    const child_type = try resolveType(mod, scope, optional.positionals.operand);
+fn analyzeInstOptionalType(sema: *Sema, scope: *Scope, optional: *zir.Inst.UnOp) InnerError!*Inst {
+    const child_type = try sema.resolveType(scope, optional.positionals.operand);
 
     return mod.constType(scope, optional.base.src, try mod.optionalType(scope, child_type));
 }
 
-fn analyzeInstArrayType(mod: *Module, scope: *Scope, array: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstArrayType(sema: *Sema, scope: *Scope, array: *zir.Inst.BinOp) InnerError!*Inst {
     // TODO these should be lazily evaluated
-    const len = try resolveInstConst(mod, scope, array.positionals.lhs);
-    const elem_type = try resolveType(mod, scope, array.positionals.rhs);
+    const len = try sema.resolveInstConst(scope, array.positionals.lhs);
+    const elem_type = try sema.resolveType(scope, array.positionals.rhs);
 
     return mod.constType(scope, array.base.src, try mod.arrayType(scope, len.val.toUnsignedInt(), null, elem_type));
 }
 
-fn analyzeInstArrayTypeSentinel(mod: *Module, scope: *Scope, array: *zir.Inst.ArrayTypeSentinel) InnerError!*Inst {
+fn analyzeInstArrayTypeSentinel(sema: *Sema, scope: *Scope, array: *zir.Inst.ArrayTypeSentinel) InnerError!*Inst {
     // TODO these should be lazily evaluated
-    const len = try resolveInstConst(mod, scope, array.positionals.len);
-    const sentinel = try resolveInstConst(mod, scope, array.positionals.sentinel);
-    const elem_type = try resolveType(mod, scope, array.positionals.elem_type);
+    const len = try sema.resolveInstConst(scope, array.positionals.len);
+    const sentinel = try sema.resolveInstConst(scope, array.positionals.sentinel);
+    const elem_type = try sema.resolveType(scope, array.positionals.elem_type);
 
     return mod.constType(scope, array.base.src, try mod.arrayType(scope, len.val.toUnsignedInt(), sentinel.val, elem_type));
 }
 
-fn analyzeInstErrorUnionType(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
-    const error_union = try resolveType(mod, scope, inst.positionals.lhs);
-    const payload = try resolveType(mod, scope, inst.positionals.rhs);
+fn analyzeInstErrorUnionType(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+    const error_union = try sema.resolveType(scope, inst.positionals.lhs);
+    const payload = try sema.resolveType(scope, inst.positionals.rhs);
 
     if (error_union.zigTypeTag() != .ErrorSet) {
         return mod.fail(scope, inst.base.src, "expected error set type, found {}", .{error_union.elemType()});
@@ -748,13 +756,13 @@ fn analyzeInstErrorUnionType(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp)
     return mod.constType(scope, inst.base.src, try mod.errorUnionType(scope, error_union, payload));
 }
 
-fn analyzeInstAnyframeType(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const return_type = try resolveType(mod, scope, inst.positionals.operand);
+fn analyzeInstAnyframeType(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const return_type = try sema.resolveType(scope, inst.positionals.operand);
 
     return mod.constType(scope, inst.base.src, try mod.anyframeType(scope, return_type));
 }
 
-fn analyzeInstErrorSet(mod: *Module, scope: *Scope, inst: *zir.Inst.ErrorSet) InnerError!*Inst {
+fn analyzeInstErrorSet(sema: *Sema, scope: *Scope, inst: *zir.Inst.ErrorSet) InnerError!*Inst {
     // The declarations arena will store the hashmap.
     var new_decl_arena = std.heap.ArenaAllocator.init(mod.gpa);
     errdefer new_decl_arena.deinit();
@@ -781,11 +789,11 @@ fn analyzeInstErrorSet(mod: *Module, scope: *Scope, inst: *zir.Inst.ErrorSet) In
     return mod.analyzeDeclRef(scope, inst.base.src, new_decl);
 }
 
-fn analyzeInstMergeErrorSets(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstMergeErrorSets(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement merge_error_sets", .{});
 }
 
-fn analyzeInstEnumLiteral(mod: *Module, scope: *Scope, inst: *zir.Inst.EnumLiteral) InnerError!*Inst {
+fn analyzeInstEnumLiteral(sema: *Sema, scope: *Scope, inst: *zir.Inst.EnumLiteral) InnerError!*Inst {
     const payload = try scope.arena().create(Value.Payload.Bytes);
     payload.* = .{
         .base = .{ .tag = .enum_literal },
@@ -797,8 +805,8 @@ fn analyzeInstEnumLiteral(mod: *Module, scope: *Scope, inst: *zir.Inst.EnumLiter
     });
 }
 
-fn analyzeInstUnwrapOptional(mod: *Module, scope: *Scope, unwrap: *zir.Inst.UnOp, safety_check: bool) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, unwrap.positionals.operand);
+fn analyzeInstUnwrapOptional(sema: *Sema, scope: *Scope, unwrap: *zir.Inst.UnOp, safety_check: bool) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, unwrap.positionals.operand);
     assert(operand.ty.zigTypeTag() == .Pointer);
 
     const elem_type = operand.ty.elemType();
@@ -819,7 +827,7 @@ fn analyzeInstUnwrapOptional(mod: *Module, scope: *Scope, unwrap: *zir.Inst.UnOp
         });
     }
 
-    const b = try mod.requireRuntimeBlock(scope, unwrap.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     if (safety_check and mod.wantSafety(scope)) {
         const is_non_null = try mod.addUnOp(b, unwrap.base.src, Type.initTag(.bool), .isnonnull, operand);
         try mod.addSafetyCheck(b, is_non_null, .unwrap_null);
@@ -827,20 +835,20 @@ fn analyzeInstUnwrapOptional(mod: *Module, scope: *Scope, unwrap: *zir.Inst.UnOp
     return mod.addUnOp(b, unwrap.base.src, child_pointer, .unwrap_optional, operand);
 }
 
-fn analyzeInstUnwrapErr(mod: *Module, scope: *Scope, unwrap: *zir.Inst.UnOp, safety_check: bool) InnerError!*Inst {
+fn analyzeInstUnwrapErr(sema: *Sema, scope: *Scope, unwrap: *zir.Inst.UnOp, safety_check: bool) InnerError!*Inst {
     return mod.fail(scope, unwrap.base.src, "TODO implement analyzeInstUnwrapErr", .{});
 }
 
-fn analyzeInstUnwrapErrCode(mod: *Module, scope: *Scope, unwrap: *zir.Inst.UnOp) InnerError!*Inst {
+fn analyzeInstUnwrapErrCode(sema: *Sema, scope: *Scope, unwrap: *zir.Inst.UnOp) InnerError!*Inst {
     return mod.fail(scope, unwrap.base.src, "TODO implement analyzeInstUnwrapErrCode", .{});
 }
 
-fn analyzeInstEnsureErrPayloadVoid(mod: *Module, scope: *Scope, unwrap: *zir.Inst.UnOp) InnerError!*Inst {
+fn analyzeInstEnsureErrPayloadVoid(sema: *Sema, scope: *Scope, unwrap: *zir.Inst.UnOp) InnerError!*Inst {
     return mod.fail(scope, unwrap.base.src, "TODO implement analyzeInstEnsureErrPayloadVoid", .{});
 }
 
-fn analyzeInstFnType(mod: *Module, scope: *Scope, fntype: *zir.Inst.FnType) InnerError!*Inst {
-    const return_type = try resolveType(mod, scope, fntype.positionals.return_type);
+fn analyzeInstFnType(sema: *Sema, scope: *Scope, fntype: *zir.Inst.FnType) InnerError!*Inst {
+    const return_type = try sema.resolveType(scope, fntype.positionals.return_type);
 
     // Hot path for some common function types.
     if (fntype.positionals.param_types.len == 0) {
@@ -864,7 +872,7 @@ fn analyzeInstFnType(mod: *Module, scope: *Scope, fntype: *zir.Inst.FnType) Inne
     const arena = scope.arena();
     const param_types = try arena.alloc(Type, fntype.positionals.param_types.len);
     for (fntype.positionals.param_types) |param_type, i| {
-        const resolved = try resolveType(mod, scope, param_type);
+        const resolved = try sema.resolveType(scope, param_type);
         // TODO skip for comptime params
         if (!resolved.isValidVarType(false)) {
             return mod.fail(scope, param_type.src, "parameter of type '{}' must be declared comptime", .{resolved});
@@ -881,30 +889,30 @@ fn analyzeInstFnType(mod: *Module, scope: *Scope, fntype: *zir.Inst.FnType) Inne
     return mod.constType(scope, fntype.base.src, Type.initPayload(&payload.base));
 }
 
-fn analyzeInstPrimitive(mod: *Module, scope: *Scope, primitive: *zir.Inst.Primitive) InnerError!*Inst {
+fn analyzeInstPrimitive(sema: *Sema, scope: *Scope, primitive: *zir.Inst.Primitive) InnerError!*Inst {
     return mod.constInst(scope, primitive.base.src, primitive.positionals.tag.toTypedValue());
 }
 
-fn analyzeInstAs(mod: *Module, scope: *Scope, as: *zir.Inst.BinOp) InnerError!*Inst {
-    const dest_type = try resolveType(mod, scope, as.positionals.lhs);
-    const new_inst = try resolveInst(mod, scope, as.positionals.rhs);
+fn analyzeInstAs(sema: *Sema, scope: *Scope, as: *zir.Inst.BinOp) InnerError!*Inst {
+    const dest_type = try sema.resolveType(scope, as.positionals.lhs);
+    const new_inst = try sema.resolveInst(scope, as.positionals.rhs);
     return mod.coerce(scope, dest_type, new_inst);
 }
 
-fn analyzeInstPtrToInt(mod: *Module, scope: *Scope, ptrtoint: *zir.Inst.UnOp) InnerError!*Inst {
-    const ptr = try resolveInst(mod, scope, ptrtoint.positionals.operand);
+fn analyzeInstPtrToInt(sema: *Sema, scope: *Scope, ptrtoint: *zir.Inst.UnOp) InnerError!*Inst {
+    const ptr = try sema.resolveInst(scope, ptrtoint.positionals.operand);
     if (ptr.ty.zigTypeTag() != .Pointer) {
         return mod.fail(scope, ptrtoint.positionals.operand.src, "expected pointer, found '{}'", .{ptr.ty});
     }
     // TODO handle known-pointer-address
-    const b = try mod.requireRuntimeBlock(scope, ptrtoint.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     const ty = Type.initTag(.usize);
     return mod.addUnOp(b, ptrtoint.base.src, ty, .ptrtoint, ptr);
 }
 
-fn analyzeInstFieldPtr(mod: *Module, scope: *Scope, fieldptr: *zir.Inst.FieldPtr) InnerError!*Inst {
-    const object_ptr = try resolveInst(mod, scope, fieldptr.positionals.object_ptr);
-    const field_name = try resolveConstString(mod, scope, fieldptr.positionals.field_name);
+fn analyzeInstFieldPtr(sema: *Sema, scope: *Scope, fieldptr: *zir.Inst.FieldPtr) InnerError!*Inst {
+    const object_ptr = try sema.resolveInst(scope, fieldptr.positionals.object_ptr);
+    const field_name = try sema.resolveConstString(scope, fieldptr.positionals.field_name);
 
     const elem_ty = switch (object_ptr.ty.zigTypeTag()) {
         .Pointer => object_ptr.ty.elemType(),
@@ -1001,9 +1009,9 @@ fn analyzeInstFieldPtr(mod: *Module, scope: *Scope, fieldptr: *zir.Inst.FieldPtr
     return mod.fail(scope, fieldptr.base.src, "type '{}' does not support field access", .{elem_ty});
 }
 
-fn analyzeInstIntCast(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
-    const dest_type = try resolveType(mod, scope, inst.positionals.lhs);
-    const operand = try resolveInst(mod, scope, inst.positionals.rhs);
+fn analyzeInstIntCast(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+    const dest_type = try sema.resolveType(scope, inst.positionals.lhs);
+    const operand = try sema.resolveInst(scope, inst.positionals.rhs);
 
     const dest_is_comptime_int = switch (dest_type.zigTypeTag()) {
         .ComptimeInt => true,
@@ -1037,15 +1045,15 @@ fn analyzeInstIntCast(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerE
     return mod.fail(scope, inst.base.src, "TODO implement analyze widen or shorten int", .{});
 }
 
-fn analyzeInstBitCast(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
-    const dest_type = try resolveType(mod, scope, inst.positionals.lhs);
-    const operand = try resolveInst(mod, scope, inst.positionals.rhs);
+fn analyzeInstBitCast(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+    const dest_type = try sema.resolveType(scope, inst.positionals.lhs);
+    const operand = try sema.resolveInst(scope, inst.positionals.rhs);
     return mod.bitcast(scope, dest_type, operand);
 }
 
-fn analyzeInstFloatCast(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
-    const dest_type = try resolveType(mod, scope, inst.positionals.lhs);
-    const operand = try resolveInst(mod, scope, inst.positionals.rhs);
+fn analyzeInstFloatCast(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+    const dest_type = try sema.resolveType(scope, inst.positionals.lhs);
+    const operand = try sema.resolveInst(scope, inst.positionals.rhs);
 
     const dest_is_comptime_float = switch (dest_type.zigTypeTag()) {
         .ComptimeFloat => true,
@@ -1079,11 +1087,11 @@ fn analyzeInstFloatCast(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) Inne
     return mod.fail(scope, inst.base.src, "TODO implement analyze widen or shorten float", .{});
 }
 
-fn analyzeInstElemPtr(mod: *Module, scope: *Scope, inst: *zir.Inst.ElemPtr) InnerError!*Inst {
-    const array_ptr = try resolveInst(mod, scope, inst.positionals.array_ptr);
-    const uncasted_index = try resolveInst(mod, scope, inst.positionals.index);
+fn analyzeInstElemPtr(sema: *Sema, scope: *Scope, inst: *zir.Inst.ElemPtr) InnerError!*Inst {
+    const array_ptr = try sema.resolveInst(scope, inst.positionals.array_ptr);
+    const uncasted_index = try sema.resolveInst(scope, inst.positionals.index);
     const elem_index = try mod.coerce(scope, Type.initTag(.usize), uncasted_index);
-    
+
     const elem_ty = switch (array_ptr.ty.zigTypeTag()) {
         .Pointer => array_ptr.ty.elemType(),
         else => return mod.fail(scope, inst.positionals.array_ptr.src, "expected pointer, found '{}'", .{array_ptr.ty}),
@@ -1120,36 +1128,36 @@ fn analyzeInstElemPtr(mod: *Module, scope: *Scope, inst: *zir.Inst.ElemPtr) Inne
     return mod.fail(scope, inst.base.src, "TODO implement more analyze elemptr", .{});
 }
 
-fn analyzeInstShl(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstShl(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstShl", .{});
 }
 
-fn analyzeInstShr(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstShr(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstShr", .{});
 }
 
-fn analyzeInstBitwise(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstBitwise(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstBitwise", .{});
 }
 
-fn analyzeInstBitNot(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+fn analyzeInstBitNot(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstBitNot", .{});
 }
 
-fn analyzeInstArrayCat(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstArrayCat(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstArrayCat", .{});
 }
 
-fn analyzeInstArrayMul(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstArrayMul(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     return mod.fail(scope, inst.base.src, "TODO implement analyzeInstArrayMul", .{});
 }
 
-fn analyzeInstArithmetic(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
+fn analyzeInstArithmetic(sema: *Sema, scope: *Scope, inst: *zir.Inst.BinOp) InnerError!*Inst {
     const tracy = trace(@src());
     defer tracy.end();
 
-    const lhs = try resolveInst(mod, scope, inst.positionals.lhs);
-    const rhs = try resolveInst(mod, scope, inst.positionals.rhs);
+    const lhs = try sema.resolveInst(scope, inst.positionals.lhs);
+    const rhs = try sema.resolveInst(scope, inst.positionals.rhs);
 
     const instructions = &[_]*Inst{ lhs, rhs };
     const resolved_type = try mod.resolvePeerTypes(scope, instructions);
@@ -1187,11 +1195,11 @@ fn analyzeInstArithmetic(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) Inn
 
     if (casted_lhs.value()) |lhs_val| {
         if (casted_rhs.value()) |rhs_val| {
-            return analyzeInstComptimeOp(mod, scope, scalar_type, inst, lhs_val, rhs_val);
+            return sema.analyzeInstComptimeOp(scope, scalar_type, inst, lhs_val, rhs_val);
         }
     }
 
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     const ir_tag = switch (inst.base.tag) {
         .add => Inst.Tag.add,
         .sub => Inst.Tag.sub,
@@ -1202,7 +1210,7 @@ fn analyzeInstArithmetic(mod: *Module, scope: *Scope, inst: *zir.Inst.BinOp) Inn
 }
 
 /// Analyzes operands that are known at comptime
-fn analyzeInstComptimeOp(mod: *Module, scope: *Scope, res_type: Type, inst: *zir.Inst.BinOp, lhs_val: Value, rhs_val: Value) InnerError!*Inst {
+fn analyzeInstComptimeOp(sema: *Sema, scope: *Scope, res_type: Type, inst: *zir.Inst.BinOp, lhs_val: Value, rhs_val: Value) InnerError!*Inst {
     // incase rhs is 0, simply return lhs without doing any calculations
     // TODO Once division is implemented we should throw an error when dividing by 0.
     if (rhs_val.compareWithZero(.eq)) {
@@ -1237,32 +1245,32 @@ fn analyzeInstComptimeOp(mod: *Module, scope: *Scope, res_type: Type, inst: *zir
     });
 }
 
-fn analyzeInstDeref(mod: *Module, scope: *Scope, deref: *zir.Inst.UnOp) InnerError!*Inst {
-    const ptr = try resolveInst(mod, scope, deref.positionals.operand);
+fn analyzeInstDeref(sema: *Sema, scope: *Scope, deref: *zir.Inst.UnOp) InnerError!*Inst {
+    const ptr = try sema.resolveInst(scope, deref.positionals.operand);
     return mod.analyzeDeref(scope, deref.base.src, ptr, deref.positionals.operand.src);
 }
 
-fn analyzeInstAsm(mod: *Module, scope: *Scope, assembly: *zir.Inst.Asm) InnerError!*Inst {
-    const return_type = try resolveType(mod, scope, assembly.positionals.return_type);
-    const asm_source = try resolveConstString(mod, scope, assembly.positionals.asm_source);
-    const output = if (assembly.kw_args.output) |o| try resolveConstString(mod, scope, o) else null;
+fn analyzeInstAsm(sema: *Sema, scope: *Scope, assembly: *zir.Inst.Asm) InnerError!*Inst {
+    const return_type = try sema.resolveType(scope, assembly.positionals.return_type);
+    const asm_source = try sema.resolveConstString(scope, assembly.positionals.asm_source);
+    const output = if (assembly.kw_args.output) |o| try sema.resolveConstString(scope, o) else null;
 
     const inputs = try scope.arena().alloc([]const u8, assembly.kw_args.inputs.len);
     const clobbers = try scope.arena().alloc([]const u8, assembly.kw_args.clobbers.len);
     const args = try scope.arena().alloc(*Inst, assembly.kw_args.args.len);
 
     for (inputs) |*elem, i| {
-        elem.* = try resolveConstString(mod, scope, assembly.kw_args.inputs[i]);
+        elem.* = try sema.resolveConstString(scope, assembly.kw_args.inputs[i]);
     }
     for (clobbers) |*elem, i| {
-        elem.* = try resolveConstString(mod, scope, assembly.kw_args.clobbers[i]);
+        elem.* = try sema.resolveConstString(scope, assembly.kw_args.clobbers[i]);
     }
     for (args) |*elem, i| {
-        const arg = try resolveInst(mod, scope, assembly.kw_args.args[i]);
+        const arg = try sema.resolveInst(scope, assembly.kw_args.args[i]);
         elem.* = try mod.coerce(scope, Type.initTag(.usize), arg);
     }
 
-    const b = try mod.requireRuntimeBlock(scope, assembly.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     const inst = try b.arena.create(Inst.Assembly);
     inst.* = .{
         .base = .{
@@ -1287,8 +1295,8 @@ fn analyzeInstCmp(
     inst: *zir.Inst.BinOp,
     op: std.math.CompareOperator,
 ) InnerError!*Inst {
-    const lhs = try resolveInst(mod, scope, inst.positionals.lhs);
-    const rhs = try resolveInst(mod, scope, inst.positionals.rhs);
+    const lhs = try sema.resolveInst(scope, inst.positionals.lhs);
+    const rhs = try sema.resolveInst(scope, inst.positionals.rhs);
 
     const is_equality_cmp = switch (op) {
         .eq, .neq => true,
@@ -1332,43 +1340,43 @@ fn analyzeInstCmp(
     return mod.fail(scope, inst.base.src, "TODO implement more cmp analysis", .{});
 }
 
-fn analyzeInstTypeOf(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstTypeOf(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     return mod.constType(scope, inst.base.src, operand.ty);
 }
 
-fn analyzeInstBoolNot(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const uncasted_operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstBoolNot(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const uncasted_operand = try sema.resolveInst(scope, inst.positionals.operand);
     const bool_type = Type.initTag(.bool);
     const operand = try mod.coerce(scope, bool_type, uncasted_operand);
     if (try mod.resolveDefinedValue(scope, operand)) |val| {
         return mod.constBool(scope, inst.base.src, !val.toBool());
     }
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     return mod.addUnOp(b, inst.base.src, bool_type, .not, operand);
 }
 
-fn analyzeInstIsNonNull(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp, invert_logic: bool) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstIsNonNull(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp, invert_logic: bool) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     return mod.analyzeIsNull(scope, inst.base.src, operand, invert_logic);
 }
 
-fn analyzeInstIsErr(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
+fn analyzeInstIsErr(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
     return mod.analyzeIsErr(scope, inst.base.src, operand);
 }
 
-fn analyzeInstCondBr(mod: *Module, scope: *Scope, inst: *zir.Inst.CondBr) InnerError!*Inst {
-    const uncasted_cond = try resolveInst(mod, scope, inst.positionals.condition);
+fn analyzeInstCondBr(sema: *Sema, scope: *Scope, inst: *zir.Inst.CondBr) InnerError!*Inst {
+    const uncasted_cond = try sema.resolveInst(scope, inst.positionals.condition);
     const cond = try mod.coerce(scope, Type.initTag(.bool), uncasted_cond);
 
     if (try mod.resolveDefinedValue(scope, cond)) |cond_val| {
         const body = if (cond_val.toBool()) &inst.positionals.then_body else &inst.positionals.else_body;
-        try analyzeBody(mod, scope, body.*);
+        try sema.analyzeBody(scope, body.*);
         return mod.constVoid(scope, inst.base.src);
     }
 
-    const parent_block = try mod.requireRuntimeBlock(scope, inst.base.src);
+    const parent_block = try mod.requireRuntimeBlock(scope);
 
     var true_block: Scope.Block = .{
         .parent = parent_block,
@@ -1378,7 +1386,7 @@ fn analyzeInstCondBr(mod: *Module, scope: *Scope, inst: *zir.Inst.CondBr) InnerE
         .arena = parent_block.arena,
     };
     defer true_block.instructions.deinit(mod.gpa);
-    try analyzeBody(mod, &true_block.base, inst.positionals.then_body);
+    try sema.analyzeBody(&true_block.base, inst.positionals.then_body);
 
     var false_block: Scope.Block = .{
         .parent = parent_block,
@@ -1388,7 +1396,7 @@ fn analyzeInstCondBr(mod: *Module, scope: *Scope, inst: *zir.Inst.CondBr) InnerE
         .arena = parent_block.arena,
     };
     defer false_block.instructions.deinit(mod.gpa);
-    try analyzeBody(mod, &false_block.base, inst.positionals.else_body);
+    try sema.analyzeBody(&false_block.base, inst.positionals.else_body);
 
     const then_body: ir.Body = .{ .instructions = try scope.arena().dupe(*Inst, true_block.instructions.items) };
     const else_body: ir.Body = .{ .instructions = try scope.arena().dupe(*Inst, false_block.instructions.items) };
@@ -1401,7 +1409,7 @@ fn analyzeInstUnreachable(
     unreach: *zir.Inst.NoOp,
     safety_check: bool,
 ) InnerError!*Inst {
-    const b = try mod.requireRuntimeBlock(scope, unreach.base.src);
+    const b = try mod.requireRuntimeBlock(scope);
     // TODO Add compile error for @optimizeFor occurring too late in a scope.
     if (safety_check and mod.wantSafety(scope)) {
         return mod.safetyPanic(b, unreach.base.src, .unreach);
@@ -1410,14 +1418,14 @@ fn analyzeInstUnreachable(
     }
 }
 
-fn analyzeInstRet(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
-    const operand = try resolveInst(mod, scope, inst.positionals.operand);
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+fn analyzeInstRet(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp) InnerError!*Inst {
+    const operand = try sema.resolveInst(scope, inst.positionals.operand);
+    const b = try mod.requireRuntimeBlock(scope);
     return mod.addUnOp(b, inst.base.src, Type.initTag(.noreturn), .ret, operand);
 }
 
-fn analyzeInstRetVoid(mod: *Module, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
-    const b = try mod.requireRuntimeBlock(scope, inst.base.src);
+fn analyzeInstRetVoid(sema: *Sema, scope: *Scope, inst: *zir.Inst.NoOp) InnerError!*Inst {
+    const b = try mod.requireRuntimeBlock(scope);
     if (b.func) |func| {
         // Need to emit a compile error if returning void is not allowed.
         const void_inst = try mod.constVoid(scope, inst.base.src);
@@ -1450,7 +1458,7 @@ fn analyzeBreak(
         if (block.label) |*label| {
             if (label.zir_block == zir_block) {
                 try label.results.append(mod.gpa, operand);
-                const b = try mod.requireRuntimeBlock(scope, src);
+                const b = try mod.requireRuntimeBlock(scope);
                 return mod.addBr(b, src, label.block_inst, operand);
             }
         }
@@ -1458,47 +1466,47 @@ fn analyzeBreak(
     } else unreachable;
 }
 
-fn analyzeDeclVal(mod: *Module, scope: *Scope, inst: *zir.Inst.DeclVal) InnerError!*Decl {
+fn analyzeDeclVal(sema: *Sema, scope: *Scope, inst: *zir.Inst.DeclVal) InnerError!*Decl {
     const decl_name = inst.positionals.name;
     const zir_module = scope.namespace().cast(Scope.ZIRModule).?;
     const src_decl = zir_module.contents.module.findDecl(decl_name) orelse
         return mod.fail(scope, inst.base.src, "use of undeclared identifier '{}'", .{decl_name});
 
-    const decl = try resolveCompleteZirDecl(mod, scope, src_decl.decl);
+    const decl = try sema.resolveCompleteZirDecl(scope, src_decl.decl);
 
     return decl;
 }
 
-fn analyzeInstSimplePtrType(mod: *Module, scope: *Scope, inst: *zir.Inst.UnOp, mutable: bool, size: std.builtin.TypeInfo.Pointer.Size) InnerError!*Inst {
-    const elem_type = try resolveType(mod, scope, inst.positionals.operand);
+fn analyzeInstSimplePtrType(sema: *Sema, scope: *Scope, inst: *zir.Inst.UnOp, mutable: bool, size: std.builtin.TypeInfo.Pointer.Size) InnerError!*Inst {
+    const elem_type = try sema.resolveType(scope, inst.positionals.operand);
     const ty = try mod.simplePtrType(scope, inst.base.src, elem_type, mutable, size);
     return mod.constType(scope, inst.base.src, ty);
 }
 
-fn analyzeInstPtrType(mod: *Module, scope: *Scope, inst: *zir.Inst.PtrType) InnerError!*Inst {
+fn analyzeInstPtrType(sema: *Sema, scope: *Scope, inst: *zir.Inst.PtrType) InnerError!*Inst {
     // TODO lazy values
     const @"align" = if (inst.kw_args.@"align") |some|
-        @truncate(u32, try resolveInt(mod, scope, some, Type.initTag(.u32)))
+        @truncate(u32, try sema.resolveInt(scope, some, Type.initTag(.u32)))
     else
         0;
     const bit_offset = if (inst.kw_args.align_bit_start) |some|
-        @truncate(u16, try resolveInt(mod, scope, some, Type.initTag(.u16)))
+        @truncate(u16, try sema.resolveInt(scope, some, Type.initTag(.u16)))
     else
         0;
     const host_size = if (inst.kw_args.align_bit_end) |some|
-        @truncate(u16, try resolveInt(mod, scope, some, Type.initTag(.u16)))
+        @truncate(u16, try sema.resolveInt(scope, some, Type.initTag(.u16)))
     else
         0;
 
     if (host_size != 0 and bit_offset >= host_size * 8)
-        return mod.fail(scope, inst.base.src, "bit offset starts after end of host integer", .{});
+        return sema.fail(scope, inst.base.src, "bit offset starts after end of host integer", .{});
 
     const sentinel = if (inst.kw_args.sentinel) |some|
-        (try resolveInstConst(mod, scope, some)).val
+        (try sema.resolveInstConst(scope, some)).val
     else
         null;
 
-    const elem_type = try resolveType(mod, scope, inst.positionals.child_type);
+    const elem_type = try sema.resolveType(scope, inst.positionals.child_type);
 
     const ty = try mod.ptrType(
         scope,
@@ -1514,4 +1522,10 @@ fn analyzeInstPtrType(mod: *Module, scope: *Scope, inst: *zir.Inst.PtrType) Inne
         inst.kw_args.size,
     );
     return mod.constType(scope, inst.base.src, ty);
+}
+
+pub fn fail(sema: *Sema, scope: *Scope, comptime format: []const u8, args: anytype) InnerError {
+    @setCold(true);
+    const err_msg = try ErrorMsg.create(sema.module.gpa, sema.src, format, args);
+    return sema.module.failWithOwnedErrorMsg(scope, sema.src, err_msg);
 }

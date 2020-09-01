@@ -227,7 +227,7 @@ pub const Decl = struct {
                 const zir_module = @fieldParentPtr(Scope.ZIRModule, "base", self.scope);
                 const module = zir_module.contents.module;
                 const src_decl = module.decls[self.src_index];
-                return src_decl.inst.src;
+                return src_decl.src;
             },
             .block => unreachable,
             .gen_zir => unreachable,
@@ -1549,12 +1549,12 @@ fn astGenAndAnalyzeDecl(self: *Module, decl: *Decl) !bool {
                         else
                             ret.operand;
                         const val = coerced.value() orelse
-                            return self.fail(&block_scope.base, inst.src, "unable to resolve comptime value", .{});
+                            return self.fail(&block_scope.base, "unable to resolve comptime value", .{});
 
                         var_type = explicit_type orelse try ret.operand.ty.copy(block_scope.arena);
                         break :blk try val.copy(block_scope.arena);
                     } else {
-                        return self.fail(&block_scope.base, inst.src, "unable to resolve comptime value", .{});
+                        return self.fail(&block_scope.base, "unable to resolve comptime value", .{});
                     }
                 }
                 unreachable;
@@ -2093,20 +2093,20 @@ pub fn getErrorValue(self: *Module, name: []const u8) !std.StringHashMapUnmanage
 }
 
 /// TODO split this into `requireRuntimeBlock` and `requireFunctionBlock` and audit callsites.
-pub fn requireRuntimeBlock(self: *Module, scope: *Scope, src: usize) !*Scope.Block {
+pub fn requireRuntimeBlock(self: *Module, scope: *Scope) !*Scope.Block {
     return scope.cast(Scope.Block) orelse
-        return self.fail(scope, src, "instruction illegal outside function body", .{});
+        return self.fail(scope, "instruction illegal outside function body", .{});
 }
 
 pub fn resolveConstValue(self: *Module, scope: *Scope, base: *Inst) !Value {
     return (try self.resolveDefinedValue(scope, base)) orelse
-        return self.fail(scope, base.src, "unable to resolve comptime value", .{});
+        return self.fail(scope, "unable to resolve comptime value", .{});
 }
 
 pub fn resolveDefinedValue(self: *Module, scope: *Scope, base: *Inst) !?Value {
     if (base.value()) |val| {
         if (val.isUndef()) {
-            return self.fail(scope, base.src, "use of undefined value here causes undefined behavior", .{});
+            return self.fail(scope, "use of undefined value here causes undefined behavior", .{});
         }
         return val;
     }
@@ -2118,7 +2118,7 @@ pub fn analyzeExport(self: *Module, scope: *Scope, src: usize, borrowed_symbol_n
     const typed_value = exported_decl.typed_value.most_recent.typed_value;
     switch (typed_value.ty.zigTypeTag()) {
         .Fn => {},
-        else => return self.fail(scope, src, "unable to export type '{}'", .{typed_value.ty}),
+        else => return self.fail(scope, "unable to export type '{}'", .{typed_value.ty}),
     }
 
     try self.decl_exports.ensureCapacity(self.gpa, self.decl_exports.items().len + 1);
@@ -2191,7 +2191,6 @@ pub fn analyzeExport(self: *Module, scope: *Scope, src: usize, borrowed_symbol_n
 pub fn addNoOp(
     self: *Module,
     block: *Scope.Block,
-    src: usize,
     ty: Type,
     comptime tag: Inst.Tag,
 ) !*Inst {
@@ -2200,7 +2199,6 @@ pub fn addNoOp(
         .base = .{
             .tag = tag,
             .ty = ty,
-            .src = src,
         },
     };
     try block.instructions.append(self.gpa, &inst.base);
@@ -2210,7 +2208,6 @@ pub fn addNoOp(
 pub fn addUnOp(
     self: *Module,
     block: *Scope.Block,
-    src: usize,
     ty: Type,
     tag: Inst.Tag,
     operand: *Inst,
@@ -2220,7 +2217,6 @@ pub fn addUnOp(
         .base = .{
             .tag = tag,
             .ty = ty,
-            .src = src,
         },
         .operand = operand,
     };
@@ -2231,7 +2227,6 @@ pub fn addUnOp(
 pub fn addBinOp(
     self: *Module,
     block: *Scope.Block,
-    src: usize,
     ty: Type,
     tag: Inst.Tag,
     lhs: *Inst,
@@ -2242,7 +2237,6 @@ pub fn addBinOp(
         .base = .{
             .tag = tag,
             .ty = ty,
-            .src = src,
         },
         .lhs = lhs,
         .rhs = rhs,
@@ -2251,13 +2245,12 @@ pub fn addBinOp(
     return &inst.base;
 }
 
-pub fn addArg(self: *Module, block: *Scope.Block, src: usize, ty: Type, name: [*:0]const u8) !*Inst {
+pub fn addArg(self: *Module, block: *Scope.Block, ty: Type, name: [*:0]const u8) !*Inst {
     const inst = try block.arena.create(Inst.Arg);
     inst.* = .{
         .base = .{
             .tag = .arg,
             .ty = ty,
-            .src = src,
         },
         .name = name,
     };
@@ -2268,7 +2261,6 @@ pub fn addArg(self: *Module, block: *Scope.Block, src: usize, ty: Type, name: [*
 pub fn addBr(
     self: *Module,
     scope_block: *Scope.Block,
-    src: usize,
     target_block: *Inst.Block,
     operand: *Inst,
 ) !*Inst {
@@ -2277,7 +2269,6 @@ pub fn addBr(
         .base = .{
             .tag = .br,
             .ty = Type.initTag(.noreturn),
-            .src = src,
         },
         .operand = operand,
         .block = target_block,
@@ -2289,7 +2280,6 @@ pub fn addBr(
 pub fn addCondBr(
     self: *Module,
     block: *Scope.Block,
-    src: usize,
     condition: *Inst,
     then_body: ir.Body,
     else_body: ir.Body,
@@ -2299,7 +2289,6 @@ pub fn addCondBr(
         .base = .{
             .tag = .condbr,
             .ty = Type.initTag(.noreturn),
-            .src = src,
         },
         .condition = condition,
         .then_body = then_body,
@@ -2312,7 +2301,6 @@ pub fn addCondBr(
 pub fn addCall(
     self: *Module,
     block: *Scope.Block,
-    src: usize,
     ty: Type,
     func: *Inst,
     args: []const *Inst,
@@ -2322,10 +2310,26 @@ pub fn addCall(
         .base = .{
             .tag = .call,
             .ty = ty,
-            .src = src,
         },
         .func = func,
         .args = args,
+    };
+    try block.instructions.append(self.gpa, &inst.base);
+    return &inst.base;
+}
+
+pub fn addDbgStmt(
+    self: *Module,
+    block: *Scope.Block,
+    src: usize,
+) !*Inst {
+    const inst = try block.arena.create(Inst.DbgStmt);
+    inst.* = .{
+        .base = .{
+            .tag = tag,
+            .ty = Type.initTag(.void),
+        },
+        .src = src,
     };
     try block.instructions.append(self.gpa, &inst.base);
     return &inst.base;
@@ -2517,7 +2521,7 @@ fn analyzeVarRef(self: *Module, scope: *Scope, src: usize, tv: TypedValue) Inner
         });
     }
 
-    const b = try self.requireRuntimeBlock(scope, src);
+    const b = try self.requireRuntimeBlock(scope);
     const inst = try b.arena.create(Inst.VarPtr);
     inst.* = .{
         .base = .{
@@ -2534,7 +2538,7 @@ fn analyzeVarRef(self: *Module, scope: *Scope, src: usize, tv: TypedValue) Inner
 pub fn analyzeDeref(self: *Module, scope: *Scope, src: usize, ptr: *Inst, ptr_src: usize) InnerError!*Inst {
     const elem_ty = switch (ptr.ty.zigTypeTag()) {
         .Pointer => ptr.ty.elemType(),
-        else => return self.fail(scope, ptr_src, "expected pointer, found '{}'", .{ptr.ty}),
+        else => return self.fail(scope, "expected pointer, found '{}'", .{ptr.ty}),
     };
     if (ptr.value()) |val| {
         return self.constInst(scope, src, .{
@@ -2543,13 +2547,13 @@ pub fn analyzeDeref(self: *Module, scope: *Scope, src: usize, ptr: *Inst, ptr_sr
         });
     }
 
-    const b = try self.requireRuntimeBlock(scope, src);
+    const b = try self.requireRuntimeBlock(scope);
     return self.addUnOp(b, src, elem_ty, .load, ptr);
 }
 
 pub fn analyzeDeclRefByName(self: *Module, scope: *Scope, src: usize, decl_name: []const u8) InnerError!*Inst {
     const decl = self.lookupDeclName(scope, decl_name) orelse
-        return self.fail(scope, src, "decl '{}' not found", .{decl_name});
+        return self.fail(scope, "decl '{}' not found", .{decl_name});
     return self.analyzeDeclRef(scope, src, decl);
 }
 
@@ -2575,13 +2579,13 @@ pub fn analyzeIsNull(
         const bool_value = if (invert_logic) !is_null else is_null;
         return self.constBool(scope, src, bool_value);
     }
-    const b = try self.requireRuntimeBlock(scope, src);
+    const b = try self.requireRuntimeBlock(scope);
     const inst_tag: Inst.Tag = if (invert_logic) .isnonnull else .isnull;
     return self.addUnOp(b, src, Type.initTag(.bool), inst_tag, operand);
 }
 
 pub fn analyzeIsErr(self: *Module, scope: *Scope, src: usize, operand: *Inst) InnerError!*Inst {
-    return self.fail(scope, src, "TODO implement analysis of iserr", .{});
+    return self.fail(scope, "TODO implement analysis of iserr", .{});
 }
 
 /// Asserts that lhs and rhs types are both numeric.
@@ -2601,14 +2605,14 @@ pub fn cmpNumeric(
 
     if (lhs_ty_tag == .Vector and rhs_ty_tag == .Vector) {
         if (lhs.ty.arrayLen() != rhs.ty.arrayLen()) {
-            return self.fail(scope, src, "vector length mismatch: {} and {}", .{
+            return self.fail(scope, "vector length mismatch: {} and {}", .{
                 lhs.ty.arrayLen(),
                 rhs.ty.arrayLen(),
             });
         }
-        return self.fail(scope, src, "TODO implement support for vectors in cmpNumeric", .{});
+        return self.fail(scope, "TODO implement support for vectors in cmpNumeric", .{});
     } else if (lhs_ty_tag == .Vector or rhs_ty_tag == .Vector) {
-        return self.fail(scope, src, "mixed scalar and vector operands to comparison operator: '{}' and '{}'", .{
+        return self.fail(scope, "mixed scalar and vector operands to comparison operator: '{}' and '{}'", .{
             lhs.ty,
             rhs.ty,
         });
@@ -2627,7 +2631,7 @@ pub fn cmpNumeric(
     // of this function if we don't need to.
 
     // It must be a runtime comparison.
-    const b = try self.requireRuntimeBlock(scope, src);
+    const b = try self.requireRuntimeBlock(scope);
     // For floats, emit a float comparison instruction.
     const lhs_is_float = switch (lhs_ty_tag) {
         .Float, .ComptimeFloat => true,
@@ -2746,7 +2750,7 @@ pub fn cmpNumeric(
     const dest_type = if (dest_float_type) |ft| ft else blk: {
         const max_bits = std.math.max(lhs_bits, rhs_bits);
         const casted_bits = std.math.cast(u16, max_bits) catch |err| switch (err) {
-            error.Overflow => return self.fail(scope, src, "{} exceeds maximum integer bit count", .{max_bits}),
+            error.Overflow => return self.fail(scope, "{} exceeds maximum integer bit count", .{max_bits}),
         };
         break :blk try self.makeIntType(scope, dest_int_is_signed, casted_bits);
     };
@@ -2761,7 +2765,7 @@ fn wrapOptional(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !*In
         return self.constInst(scope, inst.src, .{ .ty = dest_type, .val = val });
     }
 
-    const b = try self.requireRuntimeBlock(scope, inst.src);
+    const b = try self.requireRuntimeBlock(scope);
     return self.addUnOp(b, inst.src, dest_type, .wrap_optional, inst);
 }
 
@@ -2811,7 +2815,7 @@ pub fn resolvePeerTypes(self: *Module, scope: *Scope, instructions: []*Inst) !Ty
         }
 
         // TODO error notes pointing out each type
-        return self.fail(scope, next_inst.src, "incompatible types: '{}' and '{}'", .{ prev_inst.ty, next_inst.ty });
+        return self.fail(scope, "incompatible types: '{}' and '{}'", .{ prev_inst.ty, next_inst.ty });
     }
 
     return prev_inst.ty;
@@ -2878,7 +2882,7 @@ pub fn coerce(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !*Inst
         // small enough unsigned ints can get casted to large enough signed ints
             (src_info.signed and !dst_info.signed and dst_info.bits > src_info.bits))
         {
-            const b = try self.requireRuntimeBlock(scope, inst.src);
+            const b = try self.requireRuntimeBlock(scope);
             return self.addUnOp(b, inst.src, dest_type, .intcast, inst);
         }
     }
@@ -2890,12 +2894,12 @@ pub fn coerce(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !*Inst
         const src_bits = inst.ty.floatBits(self.target());
         const dst_bits = dest_type.floatBits(self.target());
         if (dst_bits >= src_bits) {
-            const b = try self.requireRuntimeBlock(scope, inst.src);
+            const b = try self.requireRuntimeBlock(scope);
             return self.addUnOp(b, inst.src, dest_type, .floatcast, inst);
         }
     }
 
-    return self.fail(scope, inst.src, "expected {}, found {}", .{ dest_type, inst.ty });
+    return self.fail(scope, "expected {}, found {}", .{ dest_type, inst.ty });
 }
 
 pub fn coerceNum(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !?*Inst {
@@ -2906,12 +2910,12 @@ pub fn coerceNum(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !?*
     if (dst_zig_tag == .ComptimeInt or dst_zig_tag == .Int) {
         if (src_zig_tag == .Float or src_zig_tag == .ComptimeFloat) {
             if (val.floatHasFraction()) {
-                return self.fail(scope, inst.src, "fractional component prevents float value {} from being casted to type '{}'", .{ val, inst.ty });
+                return self.fail(scope, "fractional component prevents float value {} from being casted to type '{}'", .{ val, inst.ty });
             }
-            return self.fail(scope, inst.src, "TODO float to int", .{});
+            return self.fail(scope, "TODO float to int", .{});
         } else if (src_zig_tag == .Int or src_zig_tag == .ComptimeInt) {
             if (!val.intFitsInType(dest_type, self.target())) {
-                return self.fail(scope, inst.src, "type {} cannot represent integer value {}", .{ inst.ty, val });
+                return self.fail(scope, "type {} cannot represent integer value {}", .{ inst.ty, val });
             }
             return self.constInst(scope, inst.src, .{ .ty = dest_type, .val = val });
         }
@@ -2920,7 +2924,6 @@ pub fn coerceNum(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !?*
             const res = val.floatCast(scope.arena(), dest_type, self.target()) catch |err| switch (err) {
                 error.Overflow => return self.fail(
                     scope,
-                    inst.src,
                     "cast of value {} to type '{}' loses information",
                     .{ val, dest_type },
                 ),
@@ -2928,7 +2931,7 @@ pub fn coerceNum(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !?*
             };
             return self.constInst(scope, inst.src, .{ .ty = dest_type, .val = res });
         } else if (src_zig_tag == .Int or src_zig_tag == .ComptimeInt) {
-            return self.fail(scope, inst.src, "TODO int to float", .{});
+            return self.fail(scope, "TODO int to float", .{});
         }
     }
     return null;
@@ -2936,7 +2939,7 @@ pub fn coerceNum(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !?*
 
 pub fn storePtr(self: *Module, scope: *Scope, src: usize, ptr: *Inst, uncasted_value: *Inst) !*Inst {
     if (ptr.ty.isConstPtr())
-        return self.fail(scope, src, "cannot assign to constant", .{});
+        return self.fail(scope, "cannot assign to constant", .{});
 
     const elem_ty = ptr.ty.elemType();
     const value = try self.coerce(scope, elem_ty, uncasted_value);
@@ -2946,7 +2949,7 @@ pub fn storePtr(self: *Module, scope: *Scope, src: usize, ptr: *Inst, uncasted_v
     // TODO handle comptime pointer writes
     // TODO handle if the element type requires comptime
 
-    const b = try self.requireRuntimeBlock(scope, src);
+    const b = try self.requireRuntimeBlock(scope);
     return self.addBinOp(b, src, Type.initTag(.void), .store, ptr, value);
 }
 
@@ -2956,7 +2959,7 @@ pub fn bitcast(self: *Module, scope: *Scope, dest_type: Type, inst: *Inst) !*Ins
         return self.constInst(scope, inst.src, .{ .ty = dest_type, .val = val });
     }
     // TODO validate the type size and other compile errors
-    const b = try self.requireRuntimeBlock(scope, inst.src);
+    const b = try self.requireRuntimeBlock(scope);
     return self.addUnOp(b, inst.src, dest_type, .bitcast, inst);
 }
 
@@ -2965,10 +2968,10 @@ fn coerceArrayPtrToSlice(self: *Module, scope: *Scope, dest_type: Type, inst: *I
         // The comptime Value representation is compatible with both types.
         return self.constInst(scope, inst.src, .{ .ty = dest_type, .val = val });
     }
-    return self.fail(scope, inst.src, "TODO implement coerceArrayPtrToSlice runtime instruction", .{});
+    return self.fail(scope, "TODO implement coerceArrayPtrToSlice runtime instruction", .{});
 }
 
-pub fn fail(self: *Module, scope: *Scope, src: usize, comptime format: []const u8, args: anytype) InnerError {
+pub fn failSrc(self: *Module, scope: *Scope, src: usize, comptime format: []const u8, args: anytype) InnerError {
     @setCold(true);
     const err_msg = try ErrorMsg.create(self.gpa, src, format, args);
     return self.failWithOwnedErrorMsg(scope, src, err_msg);

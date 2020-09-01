@@ -11,11 +11,13 @@ const Value = @import("value.zig").Value;
 const TypedValue = @import("TypedValue.zig");
 const ir = @import("ir.zig");
 const IrModule = @import("Module.zig");
+const ast = std.zig.ast;
 
 /// This struct is relevent only for the ZIR Module text format. It is not used for
 /// semantic analysis of Zig source code.
 pub const Decl = struct {
     name: []const u8,
+    src: usize,
 
     /// Hash of slice into the source of the part after the = and before the next instruction.
     contents_hash: std.zig.SrcHash,
@@ -27,8 +29,6 @@ pub const Decl = struct {
 /// in-memory, analyzed instructions with types and values.
 pub const Inst = struct {
     tag: Tag,
-    /// Byte offset into the source.
-    src: usize,
     /// Pre-allocated field for mapping ZIR text instructions to post-analysis instructions.
     analyzed_inst: ?*ir.Inst = null,
 
@@ -263,7 +263,6 @@ pub const Inst = struct {
         pub fn Type(tag: Tag) type {
             return switch (tag) {
                 .breakpoint,
-                .dbg_stmt,
                 .returnvoid,
                 .alloc_inferred,
                 .ret_ptr,
@@ -280,8 +279,6 @@ pub const Inst = struct {
                 .iserr,
                 .ptrtoint,
                 .alloc,
-                .ensure_result_used,
-                .ensure_result_non_error,
                 .ensure_indexable,
                 .bitcast_result_ptr,
                 .ref,
@@ -305,6 +302,10 @@ pub const Inst = struct {
                 .anyframe_type,
                 .bitnot,
                 => UnOp,
+
+                .ensure_result_used,
+                .ensure_result_non_error,
+                => UnOpWithSrcNode,
 
                 .add,
                 .addwrap,
@@ -345,6 +346,7 @@ pub const Inst = struct {
                 .breakvoid => BreakVoid,
                 .call => Call,
                 .coerce_to_ptr_elem => CoerceToPtrElem,
+                .dbg_stmt => DbgStmt,
                 .declref => DeclRef,
                 .declref_str => DeclRefStr,
                 .declval => DeclVal,
@@ -532,6 +534,16 @@ pub const Inst = struct {
         kw_args: struct {},
     };
 
+    pub const UnOpWithSrcNode = struct {
+        base: Inst,
+
+        positionals: struct {
+            operand: *Inst,
+            src: *ast.Node,
+        },
+        kw_args: struct {},
+    };
+
     pub const Arg = struct {
         pub const base_tag = Tag.arg;
         base: Inst,
@@ -593,6 +605,17 @@ pub const Inst = struct {
         positionals: struct {
             ptr: *Inst,
             value: *Inst,
+        },
+        kw_args: struct {},
+    };
+
+    pub const DbgStmt = struct {
+        pub const base_tag = Tag.dbg_stmt;
+        base: Inst,
+
+        positionals: struct {
+            /// Byte offset from the beginning of the file.
+            src: usize,
         },
         kw_args: struct {},
     };
@@ -961,6 +984,7 @@ pub const Module = struct {
     body_metadata: std.AutoHashMap(*Body, BodyMetaData),
 
     pub const MetaData = struct {
+        src: usize,
         deaths: ir.Inst.DeathsInt,
         addr: usize,
     };
@@ -1470,8 +1494,8 @@ const Parser = struct {
         contents_start: usize,
     ) InnerError!*Decl {
         const inst_specific = try self.arena.allocator.create(InstType);
+        const src = self.i;
         inst_specific.base = .{
-            .src = self.i,
             .tag = tag,
         };
 
@@ -1528,6 +1552,7 @@ const Parser = struct {
 
         const decl = try self.arena.allocator.create(Decl);
         decl.* = .{
+            .src = src,
             .name = inst_name,
             .contents_hash = std.zig.hashSrc(self.source[contents_start..self.i]),
             .inst = &inst_specific.base,
@@ -1645,7 +1670,6 @@ const Parser = struct {
                 const declval = try self.arena.allocator.create(Inst.DeclVal);
                 declval.* = .{
                     .base = .{
-                        .src = src,
                         .tag = Inst.DeclVal.base_tag,
                     },
                     .positionals = .{ .name = ident },
@@ -1791,7 +1815,6 @@ const EmitZIR = struct {
                     const fail_inst = try self.arena.allocator.create(Inst.CompileError);
                     fail_inst.* = .{
                         .base = .{
-                            .src = ir_decl.src(),
                             .tag = Inst.CompileError.base_tag,
                         },
                         .positionals = .{
@@ -1801,6 +1824,7 @@ const EmitZIR = struct {
                     };
                     const decl = try self.arena.allocator.create(Decl);
                     decl.* = .{
+                        .src = ir_decl.src(),
                         .name = mem.spanZ(ir_decl.name),
                         .contents_hash = undefined,
                         .inst = &fail_inst.base,
@@ -1815,7 +1839,6 @@ const EmitZIR = struct {
                     const export_inst = try self.arena.allocator.create(Inst.Export);
                     export_inst.* = .{
                         .base = .{
-                            .src = module_export.src,
                             .tag = Inst.Export.base_tag,
                         },
                         .positionals = .{
@@ -1824,7 +1847,7 @@ const EmitZIR = struct {
                         },
                         .kw_args = .{},
                     };
-                    _ = try self.emitUnnamedDecl(&export_inst.base);
+                    _ = try self.emitUnnamedDecl(module_export.src, &export_inst.base);
                 }
             } else {
                 const new_decl = try self.emitTypedValue(ir_decl.src(), ir_decl.typed_value.most_recent.typed_value);
@@ -1864,7 +1887,6 @@ const EmitZIR = struct {
         const declval = try self.arena.allocator.create(Inst.DeclVal);
         declval.* = .{
             .base = .{
-                .src = src,
                 .tag = Inst.DeclVal.base_tag,
             },
             .positionals = .{ .name = try self.arena.allocator.dupe(u8, decl_name) },
@@ -1878,7 +1900,6 @@ const EmitZIR = struct {
         const int_inst = try self.arena.allocator.create(Inst.Int);
         int_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = Inst.Int.base_tag,
             },
             .positionals = .{
@@ -1886,14 +1907,13 @@ const EmitZIR = struct {
             },
             .kw_args = .{},
         };
-        return self.emitUnnamedDecl(&int_inst.base);
+        return self.emitUnnamedDecl(src, &int_inst.base);
     }
 
     fn emitDeclRef(self: *EmitZIR, src: usize, module_decl: *IrModule.Decl) !*Inst {
         const declref_inst = try self.arena.allocator.create(Inst.DeclRef);
         declref_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = Inst.DeclRef.base_tag,
             },
             .positionals = .{
@@ -1922,7 +1942,6 @@ const EmitZIR = struct {
                 const fail_inst = try self.arena.allocator.create(Inst.CompileError);
                 fail_inst.* = .{
                     .base = .{
-                        .src = src,
                         .tag = Inst.CompileError.base_tag,
                     },
                     .positionals = .{
@@ -1936,7 +1955,6 @@ const EmitZIR = struct {
                 const fail_inst = try self.arena.allocator.create(Inst.CompileError);
                 fail_inst.* = .{
                     .base = .{
-                        .src = src,
                         .tag = Inst.CompileError.base_tag,
                     },
                     .positionals = .{
@@ -1956,7 +1974,6 @@ const EmitZIR = struct {
         const fn_inst = try self.arena.allocator.create(Inst.Fn);
         fn_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = Inst.Fn.base_tag,
             },
             .positionals = .{
@@ -1965,14 +1982,14 @@ const EmitZIR = struct {
             },
             .kw_args = .{},
         };
-        return self.emitUnnamedDecl(&fn_inst.base);
+        return self.emitUnnamedDecl(src, &fn_inst.base);
     }
 
     fn emitTypedValue(self: *EmitZIR, src: usize, typed_value: TypedValue) Allocator.Error!*Decl {
         const allocator = &self.arena.allocator;
         if (typed_value.val.cast(Value.Payload.DeclRef)) |decl_ref| {
             const decl = decl_ref.decl;
-            return try self.emitUnnamedDecl(try self.emitDeclRef(src, decl));
+            return try self.emitUnnamedDecl(src, try self.emitDeclRef(src, decl));
         } else if (typed_value.val.cast(Value.Payload.Variable)) |variable| {
             return self.emitTypedValue(src, .{
                 .ty = typed_value.ty,
@@ -1984,7 +2001,6 @@ const EmitZIR = struct {
             as_inst.* = .{
                 .base = .{
                     .tag = .as,
-                    .src = src,
                 },
                 .positionals = .{
                     .lhs = (try self.emitType(src, typed_value.ty)).inst,
@@ -1992,7 +2008,7 @@ const EmitZIR = struct {
                 },
                 .kw_args = .{},
             };
-            return self.emitUnnamedDecl(&as_inst.base);
+            return self.emitUnnamedDecl(src, &as_inst.base);
         }
         switch (typed_value.ty.zigTypeTag()) {
             .Pointer => {
@@ -2020,7 +2036,6 @@ const EmitZIR = struct {
                 as_inst.* = .{
                     .base = .{
                         .tag = .as,
-                        .src = src,
                     },
                     .positionals = .{
                         .lhs = (try self.emitType(src, typed_value.ty)).inst,
@@ -2028,7 +2043,7 @@ const EmitZIR = struct {
                     },
                     .kw_args = .{},
                 };
-                return self.emitUnnamedDecl(&as_inst.base);
+                return self.emitUnnamedDecl(src, &as_inst.base);
             },
             .Type => {
                 const ty = try typed_value.val.toType(&self.arena.allocator);
@@ -2052,7 +2067,6 @@ const EmitZIR = struct {
                 const str_inst = try self.arena.allocator.create(Inst.Str);
                 str_inst.* = .{
                     .base = .{
-                        .src = src,
                         .tag = Inst.Str.base_tag,
                     },
                     .positionals = .{
@@ -2060,7 +2074,7 @@ const EmitZIR = struct {
                     },
                     .kw_args = .{},
                 };
-                return self.emitUnnamedDecl(&str_inst.base);
+                return self.emitUnnamedDecl(src, &str_inst.base);
             },
             .Void => return self.emitPrimitive(src, .void_value),
             .Bool => if (typed_value.val.toBool())
@@ -2072,7 +2086,6 @@ const EmitZIR = struct {
                 const inst = try self.arena.allocator.create(Inst.Str);
                 inst.* = .{
                     .base = .{
-                        .src = src,
                         .tag = .enum_literal,
                     },
                     .positionals = .{
@@ -2080,7 +2093,7 @@ const EmitZIR = struct {
                     },
                     .kw_args = .{},
                 };
-                return self.emitUnnamedDecl(&inst.base);
+                return self.emitUnnamedDecl(src, &inst.base);
             },
             else => |t| std.debug.panic("TODO implement emitTypedValue for {}", .{@tagName(t)}),
         }
@@ -2090,7 +2103,6 @@ const EmitZIR = struct {
         const new_inst = try self.arena.allocator.create(Inst.NoOp);
         new_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = tag,
             },
             .positionals = .{},
@@ -2109,7 +2121,6 @@ const EmitZIR = struct {
         const new_inst = try self.arena.allocator.create(Inst.UnOp);
         new_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = tag,
             },
             .positionals = .{
@@ -2130,7 +2141,6 @@ const EmitZIR = struct {
         const new_inst = try self.arena.allocator.create(Inst.BinOp);
         new_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = tag,
             },
             .positionals = .{
@@ -2152,7 +2162,6 @@ const EmitZIR = struct {
         const new_inst = try self.arena.allocator.create(Inst.BinOp);
         new_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = tag,
             },
             .positionals = .{
@@ -2212,7 +2221,6 @@ const EmitZIR = struct {
                     const new_inst = try self.arena.allocator.create(Inst.UnOp);
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = .alloc,
                         },
                         .positionals = .{
@@ -2228,7 +2236,6 @@ const EmitZIR = struct {
                     const new_inst = try self.arena.allocator.create(Inst.Arg);
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = .arg,
                         },
                         .positionals = .{
@@ -2252,7 +2259,6 @@ const EmitZIR = struct {
 
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.Block.base_tag,
                         },
                         .positionals = .{
@@ -2277,7 +2283,6 @@ const EmitZIR = struct {
 
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.Loop.base_tag,
                         },
                         .positionals = .{
@@ -2295,7 +2300,6 @@ const EmitZIR = struct {
                     const new_inst = try self.arena.allocator.create(Inst.BreakVoid);
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.BreakVoid.base_tag,
                         },
                         .positionals = .{
@@ -2312,7 +2316,6 @@ const EmitZIR = struct {
                     const new_inst = try self.arena.allocator.create(Inst.Break);
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.Break.base_tag,
                         },
                         .positionals = .{
@@ -2334,7 +2337,6 @@ const EmitZIR = struct {
                     }
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.Call.base_tag,
                         },
                         .positionals = .{
@@ -2367,7 +2369,6 @@ const EmitZIR = struct {
 
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.Asm.base_tag,
                         },
                         .positionals = .{
@@ -2417,7 +2418,6 @@ const EmitZIR = struct {
 
                     new_inst.* = .{
                         .base = .{
-                            .src = inst.src,
                             .tag = Inst.CondBr.base_tag,
                         },
                         .positionals = .{
@@ -2488,7 +2488,6 @@ const EmitZIR = struct {
                     const fntype_inst = try self.arena.allocator.create(Inst.FnType);
                     fntype_inst.* = .{
                         .base = .{
-                            .src = src,
                             .tag = Inst.FnType.base_tag,
                         },
                         .positionals = .{
@@ -2499,7 +2498,7 @@ const EmitZIR = struct {
                             .cc = ty.fnCallingConvention(),
                         },
                     };
-                    return self.emitUnnamedDecl(&fntype_inst.base);
+                    return self.emitUnnamedDecl(src, &fntype_inst.base);
                 },
                 .Int => {
                     const info = ty.intInfo(self.old_module.target());
@@ -2510,7 +2509,6 @@ const EmitZIR = struct {
                     const inttype_inst = try self.arena.allocator.create(Inst.IntType);
                     inttype_inst.* = .{
                         .base = .{
-                            .src = src,
                             .tag = Inst.IntType.base_tag,
                         },
                         .positionals = .{
@@ -2519,7 +2517,7 @@ const EmitZIR = struct {
                         },
                         .kw_args = .{},
                     };
-                    return self.emitUnnamedDecl(&inttype_inst.base);
+                    return self.emitUnnamedDecl(src, &inttype_inst.base);
                 },
                 .Pointer => {
                     if (ty.isSinglePointer()) {
@@ -2527,7 +2525,6 @@ const EmitZIR = struct {
                         const tag: Inst.Tag = if (ty.isConstPtr()) .single_const_ptr_type else .single_mut_ptr_type;
                         inst.* = .{
                             .base = .{
-                                .src = src,
                                 .tag = tag,
                             },
                             .positionals = .{
@@ -2535,7 +2532,7 @@ const EmitZIR = struct {
                             },
                             .kw_args = .{},
                         };
-                        return self.emitUnnamedDecl(&inst.base);
+                        return self.emitUnnamedDecl(src, &inst.base);
                     } else {
                         std.debug.panic("TODO implement emitType for {}", .{ty});
                     }
@@ -2545,7 +2542,6 @@ const EmitZIR = struct {
                     const inst = try self.arena.allocator.create(Inst.UnOp);
                     inst.* = .{
                         .base = .{
-                            .src = src,
                             .tag = .optional_type,
                         },
                         .positionals = .{
@@ -2553,7 +2549,7 @@ const EmitZIR = struct {
                         },
                         .kw_args = .{},
                     };
-                    return self.emitUnnamedDecl(&inst.base);
+                    return self.emitUnnamedDecl(src, &inst.base);
                 },
                 .Array => {
                     var len_pl = Value.Payload.Int_u64{ .int = ty.arrayLen() };
@@ -2563,7 +2559,6 @@ const EmitZIR = struct {
                         const inst = try self.arena.allocator.create(Inst.ArrayTypeSentinel);
                         inst.* = .{
                             .base = .{
-                                .src = src,
                                 .tag = .array_type,
                             },
                             .positionals = .{
@@ -2584,7 +2579,6 @@ const EmitZIR = struct {
                         const inst = try self.arena.allocator.create(Inst.BinOp);
                         inst.* = .{
                             .base = .{
-                                .src = src,
                                 .tag = .array_type,
                             },
                             .positionals = .{
@@ -2598,7 +2592,7 @@ const EmitZIR = struct {
                         };
                         break :blk &inst.base;
                     };
-                    return self.emitUnnamedDecl(inst);
+                    return self.emitUnnamedDecl(src, inst);
                 },
                 else => std.debug.panic("TODO implement emitType for {}", .{ty}),
             },
@@ -2623,7 +2617,6 @@ const EmitZIR = struct {
             const primitive_inst = try self.arena.allocator.create(Inst.Primitive);
             primitive_inst.* = .{
                 .base = .{
-                    .src = src,
                     .tag = Inst.Primitive.base_tag,
                 },
                 .positionals = .{
@@ -2631,7 +2624,7 @@ const EmitZIR = struct {
                 },
                 .kw_args = .{},
             };
-            gop.entry.value = try self.emitUnnamedDecl(&primitive_inst.base);
+            gop.entry.value = try self.emitUnnamedDecl(src, &primitive_inst.base);
         }
         return gop.entry.value;
     }
@@ -2640,7 +2633,6 @@ const EmitZIR = struct {
         const str_inst = try self.arena.allocator.create(Inst.Str);
         str_inst.* = .{
             .base = .{
-                .src = src,
                 .tag = Inst.Str.base_tag,
             },
             .positionals = .{
@@ -2648,12 +2640,13 @@ const EmitZIR = struct {
             },
             .kw_args = .{},
         };
-        return self.emitUnnamedDecl(&str_inst.base);
+        return self.emitUnnamedDecl(src, &str_inst.base);
     }
 
-    fn emitUnnamedDecl(self: *EmitZIR, inst: *Inst) !*Decl {
+    fn emitUnnamedDecl(self: *EmitZIR, src: usize, inst: *Inst) !*Decl {
         const decl = try self.arena.allocator.create(Decl);
         decl.* = .{
+            .src = src,
             .name = try self.autoName(),
             .contents_hash = undefined,
             .inst = inst,

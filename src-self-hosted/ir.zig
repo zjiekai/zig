@@ -25,8 +25,6 @@ pub const Inst = struct {
     /// lifetimes of operands are encoded elsewhere.
     deaths: DeathsInt = undefined,
     ty: Type,
-    /// Byte offset into the source.
-    src: usize,
 
     pub const DeathsInt = u16;
     pub const DeathsBitIndex = std.math.Log2Int(DeathsInt);
@@ -70,6 +68,7 @@ pub const Inst = struct {
         cmp_neq,
         condbr,
         constant,
+        /// Declares the beginning of a statement. Used for debug info.
         dbg_stmt,
         isnonnull,
         isnull,
@@ -98,7 +97,6 @@ pub const Inst = struct {
                 .retvoid,
                 .unreach,
                 .breakpoint,
-                .dbg_stmt,
                 => NoOp,
 
                 .ref,
@@ -135,6 +133,7 @@ pub const Inst = struct {
                 .call => Call,
                 .condbr => CondBr,
                 .constant => Constant,
+                .dbg_stmt => DbgStmt,
                 .loop => Loop,
                 .varptr => VarPtr,
             };
@@ -419,6 +418,21 @@ pub const Inst = struct {
             return 0;
         }
         pub fn getOperand(self: *const Constant, index: usize) ?*Inst {
+            return null;
+        }
+    };
+
+    pub const DbgStmt = struct {
+        pub const base_tag = Tag.dbg_stmt;
+
+        base: Inst,
+        /// Byte offset from the beginning of the file.
+        src: usize,
+
+        pub fn operandCount(self: *const DbgStmt) usize {
+            return 0;
+        }
+        pub fn getOperand(self: *const DbgStmt, index: usize) ?*Inst {
             return null;
         }
     };
