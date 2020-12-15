@@ -100,6 +100,7 @@ static const Os os_list[] = {
     OsOpenBSD,
     OsSolaris,
     OsWindows,
+    OsZOS,
     OsHaiku,
     OsMinix,
     OsRTEMS,
