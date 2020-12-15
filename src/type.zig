@@ -3240,7 +3240,7 @@ pub const CType = enum {
             .minix,
             .rtems,
             .nacl,
-            .cnk,
+            .zos,
             .aix,
             .cuda,
             .nvcl,
